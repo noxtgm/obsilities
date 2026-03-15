@@ -1,25 +1,19 @@
-/* Left ribbon: fill height so spacer can push settings icon to bottom */
 .workspace-ribbon.mod-left {
-	display: flex !important;
-	flex-direction: column !important;
-	height: 100% !important;
+	display: flex;
+	flex-direction: column;
+	height: 100%;
 }
-/* Inner fills height so spacer can push icon to bottom */
 .workspace-ribbon.mod-left .workspace-ribbon-inner {
-	display: flex !important;
-	flex-direction: column !important;
-	flex: 1 1 auto !important;
-	min-height: 0 !important;
-}
-.workspace-ribbon.mod-left .quasar-ribbon-spacer {
+	display: flex;
+	flex-direction: column;
 	flex: 1 1 auto;
 	min-height: 0;
 }
 .workspace-ribbon.mod-left .quasar-ribbon-settings {
+	margin-top: auto;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	flex-shrink: 0;
 }
 
 .quasar-settings-list {

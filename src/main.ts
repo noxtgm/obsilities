@@ -11,7 +11,6 @@ import {
 export default class QuasarPlugin extends Plugin {
 	settings: QuasarSettings = { ...DEFAULT_SETTINGS };
 	private ribbonIconEl: HTMLElement | null = null;
-	private ribbonSpacerEl: HTMLElement | null = null;
 	private smartTypographyState: SmartTypographyState = {
 		inputRules: [],
 		inputRuleMap: {},
@@ -43,7 +42,6 @@ export default class QuasarPlugin extends Plugin {
 	}
 
 	onunload(): void {
-		this.ribbonSpacerEl?.remove();
 		this.ribbonIconEl?.remove();
 	}
 
@@ -63,8 +61,6 @@ export default class QuasarPlugin extends Plugin {
 	}
 
 	refreshSettingsButton(): void {
-		this.ribbonSpacerEl?.remove();
-		this.ribbonSpacerEl = null;
 		this.ribbonIconEl?.remove();
 		this.ribbonIconEl = null;
 		if (this.settings.showSettingsButton && Platform.isDesktopApp) {
@@ -118,13 +114,9 @@ export default class QuasarPlugin extends Plugin {
 			() => this.openSettings()
 		);
 		el.classList.add("quasar-ribbon-settings");
-		// Keep icon inside the visible ribbon-inner; add spacer before it to push to bottom
-		const ribbonInner = document.querySelector(".workspace-ribbon.mod-left .workspace-ribbon-inner") as HTMLElement | null;
-		if (ribbonInner && el.parentElement === ribbonInner) {
-			const spacer = document.createElement("div");
-			spacer.classList.add("quasar-ribbon-spacer");
-			ribbonInner.insertBefore(spacer, el);
-			this.ribbonSpacerEl = spacer;
+		const ribbon = document.querySelector(".workspace-ribbon.mod-left .workspace-ribbon-inner");
+		if (ribbon) {
+			ribbon.appendChild(el);
 		}
 		this.ribbonIconEl = el;
 	}
