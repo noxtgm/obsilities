@@ -1,4 +1,4 @@
-# Quasar Utilities
+# Quasar
 
 Miscellaneous utilities and tools for [Obsidian](https://obsidian.md/) featuring smart typography inspired by [mgmeyers's plugin](https://github.com/mgmeyers/obsidian-smart-typography) and more to come to improve your efficiency.
 
@@ -7,12 +7,12 @@ Miscellaneous utilities and tools for [Obsidian](https://obsidian.md/) featuring
 
 ## 📖 Installation
 
-* Download the latest [release](https://github.com/noxtgm/quasar-utilities/releases)
-* Extract the `quasar-utilities` folder
+* Download the latest [release](https://github.com/noxtgm/quasar/releases)
+* Extract the `quasar` folder
 * Open your Obsidian settings → Community Plugins → Enable
 * Click on the folder icon next to `Installed plugins`
-* Drag and drop `quasar-utilities` into Obsidian's `plugins` folder
-* Enable `quasar-utilities` in the installed community plugins list
+* Drag and drop `quasar` into Obsidian's `plugins` folder
+* Enable `quasar` in the installed community plugins list
 
 ## 📄 License
 

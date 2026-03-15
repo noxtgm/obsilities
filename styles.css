@@ -1,33 +1,33 @@
-.quasar-utilities-settings-btn-wrapper {
-	position: fixed;
-	top: 0;
-	right: 0;
-	z-index: 100;
-	width: 46px;
-	height: 38px;
+/* Left ribbon: fill height so spacer can push settings icon to bottom */
+.workspace-ribbon.mod-left {
+	display: flex !important;
+	flex-direction: column !important;
+	height: 100% !important;
+}
+/* Inner fills height so spacer can push icon to bottom */
+.workspace-ribbon.mod-left .workspace-ribbon-inner {
+	display: flex !important;
+	flex-direction: column !important;
+	flex: 1 1 auto !important;
+	min-height: 0 !important;
+}
+.workspace-ribbon.mod-left .quasar-ribbon-spacer {
+	flex: 1 1 auto;
+	min-height: 0;
+}
+.workspace-ribbon.mod-left .quasar-ribbon-settings {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	cursor: pointer;
-	-webkit-app-region: no-drag;
-	app-region: no-drag;
+	flex-shrink: 0;
 }
 
-.quasar-utilities-settings-btn-wrapper:hover {
-	background-color: var(--background-modifier-hover);
-}
-
-.quasar-utilities-settings-btn-wrapper svg {
-	width: 16px;
-	height: 16px;
-}
-
-.quasar-utilities-settings-list {
+.quasar-settings-list {
 	border-top: 1px solid var(--background-modifier-border);
 	margin-top: 0.75em;
 	padding-top: 0.75em;
 }
 
-.quasar-utilities-settings-list > .setting-item {
+.quasar-settings-list > .setting-item {
 	border-top: none !important;
 }

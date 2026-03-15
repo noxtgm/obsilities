@@ -1,6 +1,6 @@
 {
-    "id":"quasar-utilities",
-    "name":"QUASAR Utilities",
+    "id":"quasar",
+    "name":"Quasar",
     "version":"1.0.0",
     "minAppVersion":"0.15.0",
     "description":"Miscellaneous utilities and tools.",

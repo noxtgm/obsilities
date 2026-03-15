@@ -36,12 +36,14 @@ export const DEFAULT_SMART_TYPOGRAPHY: SmartTypographySettings = {
 	rightArrow: "→",
 };
 
-export interface QuasarUtilitiesSettings {
+export interface QuasarSettings {
 	showSettingsButton: boolean;
+	defaultGraphView: boolean;
 	smartTypography: SmartTypographySettings;
 }
 
-export const DEFAULT_SETTINGS: QuasarUtilitiesSettings = {
+export const DEFAULT_SETTINGS: QuasarSettings = {
 	showSettingsButton: true,
+	defaultGraphView: true,
 	smartTypography: { ...DEFAULT_SMART_TYPOGRAPHY },
 };

@@ -1,10 +1,10 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
-import type QuasarUtilitiesPlugin from "./main";
+import type QuasarPlugin from "./main";
 
-export class QuasarUtilitiesSettingTab extends PluginSettingTab {
-	plugin: QuasarUtilitiesPlugin;
+export class QuasarSettingTab extends PluginSettingTab {
+	plugin: QuasarPlugin;
 
-	constructor(app: App, plugin: QuasarUtilitiesPlugin) {
+	constructor(app: App, plugin: QuasarPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
@@ -16,13 +16,13 @@ export class QuasarUtilitiesSettingTab extends PluginSettingTab {
 		new Setting(containerEl).setName("Settings").setHeading();
 
 		const settingsList = containerEl.createDiv({
-			cls: "quasar-utilities-settings-list",
+			cls: "quasar-settings-list",
 		});
 
 		new Setting(settingsList)
 			.setName("Show settings button (Desktop)")
 			.setDesc(
-				"Show a button in the workspace header that opens Obsidian settings."
+				"Show a settings icon at the bottom of the left ribbon that opens Obsidian settings."
 			)
 			.addToggle((toggle) =>
 				toggle
@@ -34,37 +34,31 @@ export class QuasarUtilitiesSettingTab extends PluginSettingTab {
 					})
 			);
 
+		new Setting(settingsList)
+			.setName("Default graph view (Desktop)")
+			.setDesc(
+				"When all tabs are closed, automatically open the graph view instead of showing an empty pane."
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.defaultGraphView)
+					.onChange(async (value) => {
+						this.plugin.settings.defaultGraphView = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
 		new Setting(containerEl).setName("Smart typography").setHeading();
 
 		const st = this.plugin.settings.smartTypography;
 		const stList = containerEl.createDiv({
-			cls: "quasar-utilities-settings-list",
+			cls: "quasar-settings-list",
 		});
-
-		new Setting(stList)
-			.setName("Curly quotes")
-			.setDesc(
-				'Double and single quotes will be converted to curly quotes ("" and \'\')'
-			)
-			.addToggle((toggle) =>
-				toggle
-					.setValue(st.curlyQuotes)
-					.onChange(async (value) => {
-						st.curlyQuotes = value;
-						await this.plugin.saveSettings();
-						this.toggleVisibility(curlyQuotesCharsEl, value);
-					})
-			);
-		const curlyQuotesCharsEl = stList.createDiv({
-			cls: "quasar-utilities-st-char-fields",
-		});
-		this.addQuoteCharSettings(curlyQuotesCharsEl, st);
-		this.toggleVisibility(curlyQuotesCharsEl, st.curlyQuotes);
 
 		new Setting(stList)
 			.setName("Dashes")
 			.setDesc(
-				"Two dashes (--) → en-dash (–). En-dash + dash → em-dash (—). Em-dash + dash → three dashes (---)."
+				"Two dash (--) will be converted to en-dash (–), en-dash + dash to em-dash (—), and em-dash + dash to three dash (---)."
 			)
 			.addToggle((toggle) =>
 				toggle
@@ -76,12 +70,12 @@ export class QuasarUtilitiesSettingTab extends PluginSettingTab {
 					})
 			);
 		const skipEnDashEl = stList.createDiv({
-			cls: "quasar-utilities-st-char-fields",
+			cls: "quasar-st-char-fields",
 		});
 		new Setting(skipEnDashEl)
 			.setName("Skip en-dash")
 			.setDesc(
-				"When enabled, two dashes are converted to an em-dash instead of an en-dash."
+				"Two dashes will be converted to an em-dash instead of an en-dash."
 			)
 			.addToggle((toggle) =>
 				toggle
@@ -106,8 +100,34 @@ export class QuasarUtilitiesSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(stList)
+			.setName("Fractions")
+			.setDesc(
+				"1/2, 1/3, 1/4, etc. will be converted to half (½), one-third (⅓), one-quarter (¼), and other fraction symbols."
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(st.fractions)
+					.onChange(async (value) => {
+						st.fractions = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(stList)
+			.setName("Comparisons")
+			.setDesc("<= will be converted to less than or equal to (≤), >= to greater than or equal to (≥), and /= to not equal to (≠).")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(st.comparisons)
+					.onChange(async (value) => {
+						st.comparisons = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(stList)
 			.setName("Guillemets")
-			.setDesc("<< and >> will be converted to « and »")
+			.setDesc("<< and >> will be converted to guillemet marks (« and »).")
 			.addToggle((toggle) =>
 				toggle
 					.setValue(st.guillemets)
@@ -118,7 +138,7 @@ export class QuasarUtilitiesSettingTab extends PluginSettingTab {
 					})
 			);
 		const guillemetCharsEl = stList.createDiv({
-			cls: "quasar-utilities-st-char-fields",
+			cls: "quasar-st-char-fields",
 		});
 		new Setting(guillemetCharsEl)
 			.setName("Open guillemet")
@@ -146,7 +166,7 @@ export class QuasarUtilitiesSettingTab extends PluginSettingTab {
 
 		new Setting(stList)
 			.setName("Arrows")
-			.setDesc("<- and -> will be converted to ← and →")
+			.setDesc("<- and -> will be converted to left and right arrows (← and →).")
 			.addToggle((toggle) =>
 				toggle
 					.setValue(st.arrows)
@@ -157,7 +177,7 @@ export class QuasarUtilitiesSettingTab extends PluginSettingTab {
 					})
 			);
 		const arrowCharsEl = stList.createDiv({
-			cls: "quasar-utilities-st-char-fields",
+			cls: "quasar-st-char-fields",
 		});
 		new Setting(arrowCharsEl)
 			.setName("Left arrow")
@@ -192,30 +212,24 @@ export class QuasarUtilitiesSettingTab extends PluginSettingTab {
 		this.toggleVisibility(arrowCharsEl, st.arrows);
 
 		new Setting(stList)
-			.setName("Comparisons")
-			.setDesc("<=, >=, and /= will be converted to ≤, ≥, and ≠")
-			.addToggle((toggle) =>
-				toggle
-					.setValue(st.comparisons)
-					.onChange(async (value) => {
-						st.comparisons = value;
-						await this.plugin.saveSettings();
-					})
-			);
-
-		new Setting(stList)
-			.setName("Fractions")
+			.setName("Curly quotes")
 			.setDesc(
-				"1/2, 1/3, 1/4, etc. will be converted to ½, ⅓, ¼, and other fraction symbols."
+				'Double and single quotes will be converted to curly quotes ("" and \'\').'
 			)
 			.addToggle((toggle) =>
 				toggle
-					.setValue(st.fractions)
+					.setValue(st.curlyQuotes)
 					.onChange(async (value) => {
-						st.fractions = value;
+						st.curlyQuotes = value;
 						await this.plugin.saveSettings();
+						this.toggleVisibility(curlyQuotesCharsEl, value);
 					})
 			);
+		const curlyQuotesCharsEl = stList.createDiv({
+			cls: "quasar-st-char-fields",
+		});
+		this.addQuoteCharSettings(curlyQuotesCharsEl, st);
+		this.toggleVisibility(curlyQuotesCharsEl, st.curlyQuotes);
 	}
 
 	private toggleVisibility(el: HTMLElement, show: boolean): void {
