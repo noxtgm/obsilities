@@ -1,4 +1,4 @@
-import { Plugin, Platform } from "obsidian";
+import { Plugin, Platform, setIcon, Menu } from "obsidian";
 import type { QuasarSettings } from "./types";
 import { DEFAULT_SETTINGS } from "./types";
 import { QuasarSettingTab } from "./settings";
@@ -10,7 +10,17 @@ import {
 
 export default class QuasarPlugin extends Plugin {
 	settings: QuasarSettings = { ...DEFAULT_SETTINGS };
-	private ribbonIconEl: HTMLElement | null = null;
+	private headerContainer: HTMLElement | null = null;
+	private separatorEl: HTMLElement | null = null;
+	private sidebarTabsContainer: HTMLElement | null = null;
+	private ribbonObserver: MutationObserver | null = null;
+	private sidebarObserver: MutationObserver | null = null;
+	private sidebarTabsObserver: MutationObserver | null = null;
+	private leftSplitObserver: MutationObserver | null = null;
+	private headerResizeObserver: ResizeObserver | null = null;
+	private trailingSepEl: HTMLElement | null = null;
+	private dynamicStyleEl: HTMLStyleElement | null = null;
+	private draggedEl: HTMLElement | null = null;
 	private smartTypographyState: SmartTypographyState = {
 		inputRules: [],
 		inputRuleMap: {},
@@ -27,8 +37,16 @@ export default class QuasarPlugin extends Plugin {
 			})
 		);
 
+		this.addRibbonIcon("settings", "Open settings", () => {
+			(
+				this.app as { setting?: { open: () => void } }
+			).setting?.open();
+		});
+
 		this.app.workspace.onLayoutReady(() => {
-			this.refreshSettingsButton();
+			if (Platform.isDesktopApp) {
+				this.injectHeaderButtons();
+			}
 			this.openGraphIfEmpty();
 		});
 
@@ -42,7 +60,7 @@ export default class QuasarPlugin extends Plugin {
 	}
 
 	onunload(): void {
-		this.ribbonIconEl?.remove();
+		this.cleanupHeaderButtons();
 	}
 
 	buildSmartTypographyRules(): void {
@@ -60,12 +78,364 @@ export default class QuasarPlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 
-	refreshSettingsButton(): void {
-		this.ribbonIconEl?.remove();
-		this.ribbonIconEl = null;
-		if (this.settings.showSettingsButton && Platform.isDesktopApp) {
-			this.addRibbonSettingsIcon();
+	private injectHeaderButtons(): void {
+		const ribbon = document.querySelector(".workspace-ribbon.mod-left");
+		const workspace = document.querySelector(".workspace");
+		if (!ribbon || !workspace) return;
+
+		// Hide the ribbon entirely via body class
+		document.body.classList.add("quasar-active");
+
+		// Inject overrides — high specificity to beat theme rules
+		this.dynamicStyleEl = document.createElement("style");
+		this.dynamicStyleEl.textContent = `
+			body.quasar-active.quasar-active .workspace .workspace-split .workspace-tabs .workspace-tab-container.workspace-tab-container.workspace-tab-container.workspace-tab-container {
+				border-bottom-left-radius: 0 !important;
+				border-bottom-right-radius: 0 !important;
+			}
+		`;
+		document.head.appendChild(this.dynamicStyleEl);
+
+		// Create container in the top bar
+		this.headerContainer = createDiv({ cls: "quasar-header-buttons" });
+
+		// Add sidebar toggle button
+		const toggleBtn = createDiv({
+			cls: "quasar-toggle-btn clickable-icon",
+			attr: { "aria-label": "Toggle left sidebar" },
+		});
+		setIcon(toggleBtn, "sidebar-left");
+		toggleBtn.addEventListener("click", () => {
+			(
+				this.app as unknown as {
+					commands: { executeCommandById: (id: string) => void };
+				}
+			).commands.executeCommandById("app:toggle-left-sidebar");
+		});
+		this.headerContainer.appendChild(toggleBtn);
+
+		// Container for cloned sidebar tab headers (right after toggle)
+		this.sidebarTabsContainer = createDiv({ cls: "quasar-sidebar-tabs" });
+		this.headerContainer.appendChild(this.sidebarTabsContainer);
+
+		// Separator between sidebar tabs and ribbon buttons
+		this.separatorEl = createDiv({ cls: "quasar-separator" });
+		this.headerContainer.appendChild(this.separatorEl);
+
+		// Clone ribbon action buttons (clones proxy clicks to originals)
+		const actions = ribbon.querySelector(".side-dock-actions");
+		if (actions) {
+			const clones: HTMLElement[] = [];
+			for (const btn of Array.from(actions.children) as HTMLElement[]) {
+				clones.push(this.cloneButton(btn));
+			}
+			this.sortButtonsByOrder(clones);
+			for (const clone of clones) {
+				this.headerContainer.appendChild(clone);
+			}
+
+			this.ribbonObserver = new MutationObserver((mutations) => {
+				for (const m of mutations) {
+					for (const node of Array.from(m.addedNodes)) {
+						if (node instanceof HTMLElement) {
+							// Insert before trailing separator
+							this.trailingSepEl!.before(
+								this.cloneButton(node)
+							);
+							this.applyButtonVisibility();
+						}
+					}
+				}
+			});
+			this.ribbonObserver.observe(actions, { childList: true });
 		}
+
+		this.applyButtonVisibility();
+
+		// Right-click context menu
+		this.headerContainer.addEventListener("contextmenu", (e) => {
+			this.showButtonToggleMenu(e);
+		});
+
+		// Drag-and-drop handlers on the container
+		this.headerContainer.addEventListener("dragover", (e) => {
+			e.preventDefault();
+			if (!this.draggedEl) return;
+			const target = this.getDragTarget(e);
+			if (target && target !== this.draggedEl) {
+				const rect = target.getBoundingClientRect();
+				const midX = rect.left + rect.width / 2;
+				if (e.clientX < midX) {
+					target.before(this.draggedEl);
+				} else {
+					target.after(this.draggedEl);
+				}
+			}
+		});
+
+		this.headerContainer.addEventListener("drop", (e) => {
+			e.preventDefault();
+			this.draggedEl?.classList.remove("quasar-dragging");
+			this.draggedEl = null;
+			this.saveButtonOrder();
+		});
+
+		// Trailing separator between ribbon buttons and tabs
+		this.trailingSepEl = createDiv({ cls: "quasar-separator-trailing" });
+		this.headerContainer.appendChild(this.trailingSepEl);
+
+		// Insert into workspace
+		workspace.appendChild(this.headerContainer);
+
+		// Clone sidebar tab headers and watch for changes
+		this.syncSidebarTabs();
+		const sidebarTabInner = document.querySelector(
+			".mod-left-split .workspace-tab-header-container-inner"
+		);
+		if (sidebarTabInner) {
+			this.sidebarTabsObserver = new MutationObserver(() => {
+				this.syncSidebarTabs();
+			});
+			this.sidebarTabsObserver.observe(sidebarTabInner, {
+				childList: true,
+				subtree: true,
+				attributes: true,
+				attributeFilter: ["class"],
+			});
+		}
+
+		// Track header width and update padding
+		this.headerResizeObserver = new ResizeObserver(() => {
+			this.updateLayout();
+		});
+		this.headerResizeObserver.observe(this.headerContainer);
+
+		// Watch left split style changes (width update lags behind class change)
+		const leftSplit = document.querySelector(".mod-left-split");
+		if (leftSplit) {
+			this.leftSplitObserver = new MutationObserver(() => {
+				this.updateLayout();
+			});
+			this.leftSplitObserver.observe(leftSplit, {
+				attributes: true,
+				attributeFilter: ["style"],
+			});
+		}
+
+		// Watch sidebar state for layout updates
+		this.sidebarObserver = new MutationObserver(() => {
+			this.updateLayout();
+		});
+		this.sidebarObserver.observe(workspace, {
+			attributes: true,
+			attributeFilter: ["class"],
+		});
+
+		// Initial layout
+		requestAnimationFrame(() => this.updateLayout());
+		setTimeout(() => this.updateLayout(), 100);
+	}
+
+	private syncSidebarTabs(): void {
+		if (!this.sidebarTabsContainer) return;
+
+		const originalInner = document.querySelector(
+			".mod-left-split .workspace-tab-header-container-inner"
+		);
+		if (!originalInner) return;
+
+		// Clear existing clones
+		this.sidebarTabsContainer.empty();
+
+		// Create a simple icon button for each tab header
+		for (const original of Array.from(
+			originalInner.children
+		) as HTMLElement[]) {
+			const icon = original.querySelector(
+				".workspace-tab-header-inner-icon"
+			);
+			if (!icon) continue;
+
+			const btn = createDiv({
+				cls: "quasar-sidebar-tab clickable-icon",
+				attr: {
+					"aria-label":
+						original.getAttribute("aria-label") || "",
+				},
+			});
+			btn.innerHTML = icon.innerHTML;
+			if (original.classList.contains("is-active")) {
+				btn.classList.add("is-active");
+			}
+			btn.addEventListener("click", (e) => {
+				e.stopPropagation();
+				original.click();
+			});
+			this.sidebarTabsContainer.appendChild(btn);
+		}
+
+		this.updateLayout();
+	}
+
+	private cloneButton(original: HTMLElement): HTMLElement {
+		const clone = original.cloneNode(true) as HTMLElement;
+		clone.classList.add("quasar-header-btn");
+		clone.setAttribute("draggable", "true");
+		clone.addEventListener("click", (e) => {
+			e.stopPropagation();
+			original.click();
+		});
+		clone.addEventListener("dragstart", (e) => {
+			this.draggedEl = clone;
+			clone.classList.add("quasar-dragging");
+			e.dataTransfer?.setData("text/plain", "");
+		});
+		clone.addEventListener("dragend", () => {
+			clone.classList.remove("quasar-dragging");
+			this.draggedEl = null;
+		});
+		return clone;
+	}
+
+	private getDragTarget(e: DragEvent): HTMLElement | null {
+		const els = this.headerContainer?.querySelectorAll(
+			".quasar-header-btn"
+		);
+		if (!els) return null;
+		for (const el of Array.from(els) as HTMLElement[]) {
+			const rect = el.getBoundingClientRect();
+			if (
+				e.clientX >= rect.left &&
+				e.clientX <= rect.right &&
+				e.clientY >= rect.top &&
+				e.clientY <= rect.bottom
+			) {
+				return el;
+			}
+		}
+		return null;
+	}
+
+	private sortButtonsByOrder(buttons: HTMLElement[]): void {
+		const order = this.settings.headerButtonOrder;
+		if (!order.length) return;
+		buttons.sort((a, b) => {
+			const aLabel = a.getAttribute("aria-label") || "";
+			const bLabel = b.getAttribute("aria-label") || "";
+			const aIdx = order.indexOf(aLabel);
+			const bIdx = order.indexOf(bLabel);
+			if (aIdx === -1 && bIdx === -1) return 0;
+			if (aIdx === -1) return 1;
+			if (bIdx === -1) return -1;
+			return aIdx - bIdx;
+		});
+	}
+
+	private saveButtonOrder(): void {
+		const buttons = this.headerContainer?.querySelectorAll(
+			".quasar-header-btn"
+		);
+		if (!buttons) return;
+		this.settings.headerButtonOrder = Array.from(buttons).map(
+			(btn) => btn.getAttribute("aria-label") || ""
+		);
+		void this.saveSettings();
+	}
+
+	private showButtonToggleMenu(e: MouseEvent): void {
+		e.preventDefault();
+		const menu = new Menu();
+		const buttons =
+			this.headerContainer?.querySelectorAll(".quasar-header-btn");
+		if (!buttons?.length) return;
+
+		for (const btn of Array.from(buttons)) {
+			const label = btn.getAttribute("aria-label") || "Unknown";
+			const isHidden =
+				this.settings.hiddenHeaderButtons[label] ?? false;
+			menu.addItem((item) => {
+				item.setTitle(label)
+					.setChecked(!isHidden)
+					.onClick(async () => {
+						this.settings.hiddenHeaderButtons[label] = !isHidden;
+						await this.saveSettings();
+						this.applyButtonVisibility();
+					});
+			});
+		}
+
+		menu.showAtMouseEvent(e);
+	}
+
+	applyButtonVisibility(): void {
+		const buttons =
+			this.headerContainer?.querySelectorAll(".quasar-header-btn");
+		if (!buttons) return;
+		for (const btn of Array.from(buttons)) {
+			const label = btn.getAttribute("aria-label") || "";
+			const isHidden =
+				this.settings.hiddenHeaderButtons[label] ?? false;
+			btn.classList.toggle("quasar-button-hidden", isHidden);
+		}
+	}
+
+	private updateLayout(): void {
+		if (!this.headerContainer) return;
+
+		const headerWidth =
+			this.headerContainer.getBoundingClientRect().width;
+
+		document.documentElement.style.setProperty(
+			"--quasar-header-width",
+			`${headerWidth}px`
+		);
+
+		const isSidebarOpen = document.querySelector(
+			".workspace.is-left-sidedock-open"
+		);
+
+		if (isSidebarOpen) {
+			const leftSplit = document.querySelector(
+				".mod-left-split"
+			) as HTMLElement | null;
+			const splitWidth = leftSplit
+				? parseFloat(leftSplit.style.width) || 0
+				: 0;
+			const rootExtra = Math.max(0, headerWidth - splitWidth);
+			document.documentElement.style.setProperty(
+				"--quasar-root-extra",
+				`${rootExtra}px`
+			);
+		} else {
+			document.documentElement.style.setProperty(
+				"--quasar-root-extra",
+				`${headerWidth}px`
+			);
+		}
+	}
+
+	private cleanupHeaderButtons(): void {
+		this.ribbonObserver?.disconnect();
+		this.ribbonObserver = null;
+		this.sidebarObserver?.disconnect();
+		this.sidebarObserver = null;
+		this.sidebarTabsObserver?.disconnect();
+		this.sidebarTabsObserver = null;
+		this.leftSplitObserver?.disconnect();
+		this.leftSplitObserver = null;
+		this.headerResizeObserver?.disconnect();
+		this.headerResizeObserver = null;
+
+		document.body.classList.remove("quasar-active");
+		this.dynamicStyleEl?.remove();
+		this.dynamicStyleEl = null;
+		this.headerContainer?.remove();
+		this.headerContainer = null;
+		this.separatorEl = null;
+		this.trailingSepEl = null;
+		this.sidebarTabsContainer = null;
+		document.documentElement.style.removeProperty("--quasar-header-width");
+		document.documentElement.style.removeProperty("--quasar-root-extra");
 	}
 
 	private openGraphIfEmpty(): void {
@@ -78,9 +448,9 @@ export default class QuasarPlugin extends Plugin {
 		const rootLeaves = this.app.workspace.rootSplit
 			? this.getAllLeaves(this.app.workspace.rootSplit)
 			: [];
-		const allEmpty = rootLeaves.length > 0 && rootLeaves.every(
-			(l) => l.view?.getViewType() === "empty"
-		);
+		const allEmpty =
+			rootLeaves.length > 0 &&
+			rootLeaves.every((l) => l.view?.getViewType() === "empty");
 		if (!allEmpty) return;
 
 		const leaf = leaves[0];
@@ -89,7 +459,9 @@ export default class QuasarPlugin extends Plugin {
 		}
 	}
 
-	private getAllLeaves(parent: unknown): import("obsidian").WorkspaceLeaf[] {
+	private getAllLeaves(
+		parent: unknown
+	): import("obsidian").WorkspaceLeaf[] {
 		const leaves: import("obsidian").WorkspaceLeaf[] = [];
 		const container = parent as { children?: unknown[] };
 		if (!container.children) return leaves;
@@ -101,23 +473,5 @@ export default class QuasarPlugin extends Plugin {
 			}
 		}
 		return leaves;
-	}
-
-	private openSettings(): void {
-		(this.app as { setting?: { open: () => void } }).setting?.open();
-	}
-
-	private addRibbonSettingsIcon(): void {
-		const el = this.addRibbonIcon(
-			"settings",
-			"Open settings",
-			() => this.openSettings()
-		);
-		el.classList.add("quasar-ribbon-settings");
-		const ribbon = document.querySelector(".workspace-ribbon.mod-left .workspace-ribbon-inner");
-		if (ribbon) {
-			ribbon.appendChild(el);
-		}
-		this.ribbonIconEl = el;
 	}
 }

@@ -20,21 +20,6 @@ export class QuasarSettingTab extends PluginSettingTab {
 		});
 
 		new Setting(settingsList)
-			.setName("Show settings button (Desktop)")
-			.setDesc(
-				"Show a settings icon at the bottom of the left ribbon that opens Obsidian settings."
-			)
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.showSettingsButton)
-					.onChange(async (value) => {
-						this.plugin.settings.showSettingsButton = value;
-						await this.plugin.saveSettings();
-						this.plugin.refreshSettingsButton();
-					})
-			);
-
-		new Setting(settingsList)
 			.setName("Default graph view (Desktop)")
 			.setDesc(
 				"When all tabs are closed, automatically open the graph view instead of showing an empty pane."

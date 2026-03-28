@@ -1,21 +1,124 @@
-.workspace-ribbon.mod-left {
-	display: flex;
-	flex-direction: column;
-	height: 100%;
-}
-.workspace-ribbon.mod-left .workspace-ribbon-inner {
-	display: flex;
-	flex-direction: column;
-	flex: 1 1 auto;
-	min-height: 0;
-}
-.workspace-ribbon.mod-left .quasar-ribbon-settings {
-	margin-top: auto;
-	display: flex;
-	align-items: center;
-	justify-content: center;
+/* Hide the ribbon entirely when plugin is active */
+body.quasar-active .workspace-ribbon.mod-left {
+	display: none !important;
 }
 
+/* Remove all outer margins/padding from the theme border layout */
+body.quasar-active:not(.is-mobile) .workspace {
+	margin-right: 0 !important;
+}
+
+body.quasar-active:not(.is-mobile) .workspace .workspace-split.mod-left-split,
+body.quasar-active:not(.is-mobile) .workspace .workspace-split.mod-right-split,
+body.quasar-active:not(.is-mobile) .workspace .workspace-split.mod-root:not(.mod-right-split):not(.mod-left-split) {
+	padding-bottom: 0 !important;
+}
+
+
+/* Hide the native sidebar toggle — we provide our own */
+body.quasar-active .sidebar-toggle-button.mod-left {
+	display: none !important;
+}
+
+/* Hide original sidebar tab headers (clones are in the top bar).
+   Use visibility:hidden to preserve the container's space in the sidebar. */
+body.quasar-active .workspace.is-left-sidedock-open .mod-left-split .workspace-tab-header-container-inner {
+	visibility: hidden;
+}
+
+/* Header buttons — top bar, starting at left edge */
+.quasar-header-buttons {
+	position: absolute;
+	top: 0;
+	left: 0;
+	z-index: 15;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	height: 40px;
+	padding: 0 4px;
+	gap: 1px;
+}
+
+.quasar-header-buttons .clickable-icon {
+	display: flex !important;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+}
+
+.quasar-header-buttons .quasar-button-hidden {
+	display: none !important;
+}
+
+.quasar-header-btn {
+	pointer-events: auto;
+	cursor: grab;
+	padding: 6px;
+}
+
+.quasar-header-btn.quasar-dragging {
+	opacity: 0.4;
+	cursor: grabbing;
+}
+
+.quasar-toggle-btn {
+	pointer-events: auto;
+	margin-left: 6px;
+	margin-right: 2px;
+}
+
+/* Separator between ribbon buttons and sidebar tabs — only when sidebar is open */
+.quasar-separator {
+	display: none;
+	width: 1px;
+	height: 20px;
+	background: var(--background-modifier-border);
+	margin: 0 4px;
+	flex-shrink: 0;
+}
+
+.workspace.is-left-sidedock-open .quasar-separator {
+	display: block;
+}
+
+/* Trailing separator between last buttons and tabs — always visible */
+.quasar-separator-trailing {
+	width: 1.5px;
+	height: 20px;
+	background: var(--background-modifier-border);
+	margin: 0 0 0 4px;
+	flex-shrink: 0;
+}
+
+/* Cloned sidebar tab headers in the top bar */
+.quasar-sidebar-tabs {
+	display: none;
+	flex-direction: row;
+	align-items: center;
+	gap: 1px;
+}
+
+.workspace.is-left-sidedock-open .quasar-sidebar-tabs {
+	display: flex;
+}
+
+.quasar-sidebar-tab {
+	pointer-events: auto;
+	padding: 6px;
+}
+
+/* Push root tab headers right to account for all top bar elements */
+body.quasar-active .mod-root .workspace-tab-header-container {
+	padding-left: var(--quasar-root-extra, 0px) !important;
+}
+
+/* Ensure workspace positions absolute children */
+.workspace {
+	position: relative;
+}
+
+/* Settings list styling */
 .quasar-settings-list {
 	border-top: 1px solid var(--background-modifier-border);
 	margin-top: 0.75em;

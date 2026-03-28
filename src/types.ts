@@ -37,13 +37,15 @@ export const DEFAULT_SMART_TYPOGRAPHY: SmartTypographySettings = {
 };
 
 export interface QuasarSettings {
-	showSettingsButton: boolean;
 	defaultGraphView: boolean;
+	hiddenHeaderButtons: Record<string, boolean>;
+	headerButtonOrder: string[];
 	smartTypography: SmartTypographySettings;
 }
 
 export const DEFAULT_SETTINGS: QuasarSettings = {
-	showSettingsButton: true,
 	defaultGraphView: true,
+	hiddenHeaderButtons: {},
+	headerButtonOrder: [],
 	smartTypography: { ...DEFAULT_SMART_TYPOGRAPHY },
 };
