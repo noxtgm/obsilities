@@ -1,18 +1,15 @@
-# Quasar
+# Obsilities
 
 Miscellaneous utilities and tools for [Obsidian](https://obsidian.md/) featuring smart typography inspired by [mgmeyers's plugin](https://github.com/mgmeyers/obsidian-smart-typography) and more to come to improve your efficiency.
 
-> [!NOTE]
-> This plugin is in part designed to be paired with my [quasar theme](https://github.com/noxtgm/quasar-theme) for enhanced functionality however it is fully functional on its own.
-
 ## 📖 Installation
 
-* Download the latest [release](https://github.com/noxtgm/quasar/releases)
-* Extract the `quasar` folder
+* Download the latest [release](https://github.com/noxtgm/obsilities/releases)
+* Extract the `obsilities` folder
 * Open your Obsidian settings → Community Plugins → Enable
 * Click on the folder icon next to `Installed plugins`
-* Drag and drop `quasar` into Obsidian's `plugins` folder
-* Enable `quasar` in the installed community plugins list
+* Drag and drop `obsilities` into Obsidian's `plugins` folder
+* Enable `obsilities` in the installed community plugins list
 
 ## 📄 License
 
