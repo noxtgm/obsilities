@@ -1,10 +1,10 @@
 # Obsilities
 
-Miscellaneous utilities and tools for [Obsidian](https://obsidian.md/) featuring smart typography inspired by [mgmeyers's plugin](https://github.com/mgmeyers/obsidian-smart-typography) and more to come to improve your efficiency.
+Miscellaneous utilities and tools for [Obsidian](https://obsidian.md/) featuring smart typography inspired by [mgmeyers's plugin](https://github.com/mgmeyers/obsidian-smart-typography) and more to improve your efficiency.
 
 ## 📖 Installation
 
-* Download the latest [release](https://github.com/noxtgm/obsilities/releases)
+* Download the latest version
 * Extract the `obsilities` folder
 * Open your Obsidian settings → Community Plugins → Enable
 * Click on the folder icon next to `Installed plugins`
