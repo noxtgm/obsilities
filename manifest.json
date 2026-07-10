@@ -1,6 +1,6 @@
 {
-    "id":"quasar",
-    "name":"Quasar",
+    "id":"obsilities",
+    "name":"Obsilities",
     "version":"1.0.0",
     "minAppVersion":"0.15.0",
     "description":"Miscellaneous utilities and tools.",

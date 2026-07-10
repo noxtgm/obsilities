@@ -1,10 +1,10 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
-import type QuasarPlugin from "./main";
+import type ObsilitiesPlugin from "./main";
 
-export class QuasarSettingTab extends PluginSettingTab {
-	plugin: QuasarPlugin;
+export class ObsilitiesSettingTab extends PluginSettingTab {
+	plugin: ObsilitiesPlugin;
 
-	constructor(app: App, plugin: QuasarPlugin) {
+	constructor(app: App, plugin: ObsilitiesPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
@@ -16,7 +16,7 @@ export class QuasarSettingTab extends PluginSettingTab {
 		new Setting(containerEl).setName("Settings").setHeading();
 
 		const settingsList = containerEl.createDiv({
-			cls: "quasar-settings-list",
+			cls: "obsilities-settings-list",
 		});
 
 		new Setting(settingsList)
@@ -37,7 +37,7 @@ export class QuasarSettingTab extends PluginSettingTab {
 
 		const st = this.plugin.settings.smartTypography;
 		const stList = containerEl.createDiv({
-			cls: "quasar-settings-list",
+			cls: "obsilities-settings-list",
 		});
 
 		new Setting(stList)
@@ -55,7 +55,7 @@ export class QuasarSettingTab extends PluginSettingTab {
 					})
 			);
 		const skipEnDashEl = stList.createDiv({
-			cls: "quasar-st-char-fields",
+			cls: "obsilities-st-char-fields",
 		});
 		new Setting(skipEnDashEl)
 			.setName("Skip en-dash")
@@ -123,7 +123,7 @@ export class QuasarSettingTab extends PluginSettingTab {
 					})
 			);
 		const guillemetCharsEl = stList.createDiv({
-			cls: "quasar-st-char-fields",
+			cls: "obsilities-st-char-fields",
 		});
 		new Setting(guillemetCharsEl)
 			.setName("Open guillemet")
@@ -162,7 +162,7 @@ export class QuasarSettingTab extends PluginSettingTab {
 					})
 			);
 		const arrowCharsEl = stList.createDiv({
-			cls: "quasar-st-char-fields",
+			cls: "obsilities-st-char-fields",
 		});
 		new Setting(arrowCharsEl)
 			.setName("Left arrow")
@@ -211,7 +211,7 @@ export class QuasarSettingTab extends PluginSettingTab {
 					})
 			);
 		const curlyQuotesCharsEl = stList.createDiv({
-			cls: "quasar-st-char-fields",
+			cls: "obsilities-st-char-fields",
 		});
 		this.addQuoteCharSettings(curlyQuotesCharsEl, st);
 		this.toggleVisibility(curlyQuotesCharsEl, st.curlyQuotes);

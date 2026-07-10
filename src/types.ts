@@ -36,14 +36,14 @@ export const DEFAULT_SMART_TYPOGRAPHY: SmartTypographySettings = {
 	rightArrow: "→",
 };
 
-export interface QuasarSettings {
+export interface ObsilitiesSettings {
 	defaultGraphView: boolean;
 	hiddenHeaderButtons: Record<string, boolean>;
 	headerButtonOrder: string[];
 	smartTypography: SmartTypographySettings;
 }
 
-export const DEFAULT_SETTINGS: QuasarSettings = {
+export const DEFAULT_SETTINGS: ObsilitiesSettings = {
 	defaultGraphView: true,
 	hiddenHeaderButtons: {},
 	headerButtonOrder: [],

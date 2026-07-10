@@ -1,15 +1,15 @@
 import { Plugin, Platform, setIcon, Menu } from "obsidian";
-import type { QuasarSettings } from "./types";
+import type { ObsilitiesSettings } from "./types";
 import { DEFAULT_SETTINGS } from "./types";
-import { QuasarSettingTab } from "./settings";
+import { ObsilitiesSettingTab } from "./settings";
 import {
 	buildInputRules,
 	createSmartTypographyExtension,
 	type SmartTypographyState,
 } from "./typography/extension";
 
-export default class QuasarPlugin extends Plugin {
-	settings: QuasarSettings = { ...DEFAULT_SETTINGS };
+export default class ObsilitiesPlugin extends Plugin {
+	settings: ObsilitiesSettings = { ...DEFAULT_SETTINGS };
 	private headerContainer: HTMLElement | null = null;
 	private separatorEl: HTMLElement | null = null;
 	private sidebarTabsContainer: HTMLElement | null = null;
@@ -56,7 +56,7 @@ export default class QuasarPlugin extends Plugin {
 			})
 		);
 
-		this.addSettingTab(new QuasarSettingTab(this.app, this));
+		this.addSettingTab(new ObsilitiesSettingTab(this.app, this));
 	}
 
 	onunload(): void {
@@ -84,12 +84,12 @@ export default class QuasarPlugin extends Plugin {
 		if (!ribbon || !workspace) return;
 
 		// Hide the ribbon entirely via body class
-		document.body.classList.add("quasar-active");
+		document.body.classList.add("obsilities-active");
 
 		// Inject overrides — high specificity to beat theme rules
 		this.dynamicStyleEl = document.createElement("style");
 		this.dynamicStyleEl.textContent = `
-			body.quasar-active.quasar-active .workspace .workspace-split .workspace-tabs .workspace-tab-container.workspace-tab-container.workspace-tab-container.workspace-tab-container {
+			body.obsilities-active.obsilities-active .workspace .workspace-split .workspace-tabs .workspace-tab-container.workspace-tab-container.workspace-tab-container.workspace-tab-container {
 				border-bottom-left-radius: 0 !important;
 				border-bottom-right-radius: 0 !important;
 			}
@@ -97,11 +97,11 @@ export default class QuasarPlugin extends Plugin {
 		document.head.appendChild(this.dynamicStyleEl);
 
 		// Create container in the top bar
-		this.headerContainer = createDiv({ cls: "quasar-header-buttons" });
+		this.headerContainer = createDiv({ cls: "obsilities-header-buttons" });
 
 		// Add sidebar toggle button
 		const toggleBtn = createDiv({
-			cls: "quasar-toggle-btn clickable-icon",
+			cls: "obsilities-toggle-btn clickable-icon",
 			attr: { "aria-label": "Toggle left sidebar" },
 		});
 		setIcon(toggleBtn, "sidebar-left");
@@ -115,11 +115,11 @@ export default class QuasarPlugin extends Plugin {
 		this.headerContainer.appendChild(toggleBtn);
 
 		// Container for cloned sidebar tab headers (right after toggle)
-		this.sidebarTabsContainer = createDiv({ cls: "quasar-sidebar-tabs" });
+		this.sidebarTabsContainer = createDiv({ cls: "obsilities-sidebar-tabs" });
 		this.headerContainer.appendChild(this.sidebarTabsContainer);
 
 		// Separator between sidebar tabs and ribbon buttons
-		this.separatorEl = createDiv({ cls: "quasar-separator" });
+		this.separatorEl = createDiv({ cls: "obsilities-separator" });
 		this.headerContainer.appendChild(this.separatorEl);
 
 		// Clone ribbon action buttons (clones proxy clicks to originals)
@@ -175,13 +175,13 @@ export default class QuasarPlugin extends Plugin {
 
 		this.headerContainer.addEventListener("drop", (e) => {
 			e.preventDefault();
-			this.draggedEl?.classList.remove("quasar-dragging");
+			this.draggedEl?.classList.remove("obsilities-dragging");
 			this.draggedEl = null;
 			this.saveButtonOrder();
 		});
 
 		// Trailing separator between ribbon buttons and tabs
-		this.trailingSepEl = createDiv({ cls: "quasar-separator-trailing" });
+		this.trailingSepEl = createDiv({ cls: "obsilities-separator-trailing" });
 		this.headerContainer.appendChild(this.trailingSepEl);
 
 		// Insert into workspace
@@ -257,7 +257,7 @@ export default class QuasarPlugin extends Plugin {
 			if (!icon) continue;
 
 			const btn = createDiv({
-				cls: "quasar-sidebar-tab clickable-icon",
+				cls: "obsilities-sidebar-tab clickable-icon",
 				attr: {
 					"aria-label":
 						original.getAttribute("aria-label") || "",
@@ -279,7 +279,7 @@ export default class QuasarPlugin extends Plugin {
 
 	private cloneButton(original: HTMLElement): HTMLElement {
 		const clone = original.cloneNode(true) as HTMLElement;
-		clone.classList.add("quasar-header-btn");
+		clone.classList.add("obsilities-header-btn");
 		clone.setAttribute("draggable", "true");
 		clone.addEventListener("click", (e) => {
 			e.stopPropagation();
@@ -287,11 +287,11 @@ export default class QuasarPlugin extends Plugin {
 		});
 		clone.addEventListener("dragstart", (e) => {
 			this.draggedEl = clone;
-			clone.classList.add("quasar-dragging");
+			clone.classList.add("obsilities-dragging");
 			e.dataTransfer?.setData("text/plain", "");
 		});
 		clone.addEventListener("dragend", () => {
-			clone.classList.remove("quasar-dragging");
+			clone.classList.remove("obsilities-dragging");
 			this.draggedEl = null;
 		});
 		return clone;
@@ -299,7 +299,7 @@ export default class QuasarPlugin extends Plugin {
 
 	private getDragTarget(e: DragEvent): HTMLElement | null {
 		const els = this.headerContainer?.querySelectorAll(
-			".quasar-header-btn"
+			".obsilities-header-btn"
 		);
 		if (!els) return null;
 		for (const el of Array.from(els) as HTMLElement[]) {
@@ -333,7 +333,7 @@ export default class QuasarPlugin extends Plugin {
 
 	private saveButtonOrder(): void {
 		const buttons = this.headerContainer?.querySelectorAll(
-			".quasar-header-btn"
+			".obsilities-header-btn"
 		);
 		if (!buttons) return;
 		this.settings.headerButtonOrder = Array.from(buttons).map(
@@ -346,7 +346,7 @@ export default class QuasarPlugin extends Plugin {
 		e.preventDefault();
 		const menu = new Menu();
 		const buttons =
-			this.headerContainer?.querySelectorAll(".quasar-header-btn");
+			this.headerContainer?.querySelectorAll(".obsilities-header-btn");
 		if (!buttons?.length) return;
 
 		for (const btn of Array.from(buttons)) {
@@ -369,13 +369,13 @@ export default class QuasarPlugin extends Plugin {
 
 	applyButtonVisibility(): void {
 		const buttons =
-			this.headerContainer?.querySelectorAll(".quasar-header-btn");
+			this.headerContainer?.querySelectorAll(".obsilities-header-btn");
 		if (!buttons) return;
 		for (const btn of Array.from(buttons)) {
 			const label = btn.getAttribute("aria-label") || "";
 			const isHidden =
 				this.settings.hiddenHeaderButtons[label] ?? false;
-			btn.classList.toggle("quasar-button-hidden", isHidden);
+			btn.classList.toggle("obsilities-button-hidden", isHidden);
 		}
 	}
 
@@ -386,7 +386,7 @@ export default class QuasarPlugin extends Plugin {
 			this.headerContainer.getBoundingClientRect().width;
 
 		document.documentElement.style.setProperty(
-			"--quasar-header-width",
+			"--obsilities-header-width",
 			`${headerWidth}px`
 		);
 
@@ -403,12 +403,12 @@ export default class QuasarPlugin extends Plugin {
 				: 0;
 			const rootExtra = Math.max(0, headerWidth - splitWidth);
 			document.documentElement.style.setProperty(
-				"--quasar-root-extra",
+				"--obsilities-root-extra",
 				`${rootExtra}px`
 			);
 		} else {
 			document.documentElement.style.setProperty(
-				"--quasar-root-extra",
+				"--obsilities-root-extra",
 				`${headerWidth}px`
 			);
 		}
@@ -426,7 +426,7 @@ export default class QuasarPlugin extends Plugin {
 		this.headerResizeObserver?.disconnect();
 		this.headerResizeObserver = null;
 
-		document.body.classList.remove("quasar-active");
+		document.body.classList.remove("obsilities-active");
 		this.dynamicStyleEl?.remove();
 		this.dynamicStyleEl = null;
 		this.headerContainer?.remove();
@@ -434,8 +434,8 @@ export default class QuasarPlugin extends Plugin {
 		this.separatorEl = null;
 		this.trailingSepEl = null;
 		this.sidebarTabsContainer = null;
-		document.documentElement.style.removeProperty("--quasar-header-width");
-		document.documentElement.style.removeProperty("--quasar-root-extra");
+		document.documentElement.style.removeProperty("--obsilities-header-width");
+		document.documentElement.style.removeProperty("--obsilities-root-extra");
 	}
 
 	private openGraphIfEmpty(): void {
