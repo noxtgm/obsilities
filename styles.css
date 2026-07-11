@@ -1,32 +1,39 @@
-/* Hide the ribbon entirely when plugin is active */
+body.obsilities-active:not(.is-mobile)
+	.workspace
+	.workspace-split.mod-left-split,
+body.obsilities-active:not(.is-mobile)
+	.workspace
+	.workspace-split.mod-right-split,
+body.obsilities-active:not(.is-mobile)
+	.workspace
+	.workspace-split.mod-root:not(.mod-right-split):not(.mod-left-split) {
+	padding-bottom: 0 !important;
+}
+
+/* Hide ribbon entirely when plugin is active */
 body.obsilities-active .workspace-ribbon.mod-left {
 	display: none !important;
 }
 
-/* Remove all outer margins/padding from the theme border layout */
-body.obsilities-active:not(.is-mobile) .workspace {
-	margin-right: 0 !important;
-}
-
-body.obsilities-active:not(.is-mobile) .workspace .workspace-split.mod-left-split,
-body.obsilities-active:not(.is-mobile) .workspace .workspace-split.mod-right-split,
-body.obsilities-active:not(.is-mobile) .workspace .workspace-split.mod-root:not(.mod-right-split):not(.mod-left-split) {
-	padding-bottom: 0 !important;
-}
-
-
-/* Hide the native sidebar toggle — we provide our own */
+/* Hide native sidebar toggle */
 body.obsilities-active .sidebar-toggle-button.mod-left {
 	display: none !important;
 }
 
-/* Hide original sidebar tab headers (clones are in the top bar).
-   Use visibility:hidden to preserve the container's space in the sidebar. */
-body.obsilities-active .workspace.is-left-sidedock-open .mod-left-split .workspace-tab-header-container-inner {
+/* Hide right sidebar toggle (desktop) */
+body.obsilities-active:not(.is-mobile) .sidebar-toggle-button.mod-right {
+	display: none !important;
+}
+
+/* Hide original sidebar tab headers */
+body.obsilities-active
+	.workspace.is-left-sidedock-open
+	.mod-left-split
+	.workspace-tab-header-container-inner {
 	visibility: hidden;
 }
 
-/* Header buttons — top bar, starting at left edge */
+/* Header buttons (top bar, starting at left edge) */
 .obsilities-header-buttons {
 	position: absolute;
 	top: 0;
@@ -68,12 +75,12 @@ body.obsilities-active .workspace.is-left-sidedock-open .mod-left-split .workspa
 	margin-right: 2px;
 }
 
-/* Separator between ribbon buttons and sidebar tabs — only when sidebar is open */
+/* Separator between ribbon buttons and sidebar tabs (only when sidebar is open) */
 .obsilities-separator {
 	display: none;
-	width: 1px;
+	width: 2px;
 	height: 20px;
-	background: var(--background-modifier-border);
+	background: var(--background-secondary);
 	margin: 0 4px;
 	flex-shrink: 0;
 }
@@ -82,11 +89,11 @@ body.obsilities-active .workspace.is-left-sidedock-open .mod-left-split .workspa
 	display: block;
 }
 
-/* Trailing separator between last buttons and tabs — always visible */
+/* Trailing separator between last buttons and tabs */
 .obsilities-separator-trailing {
-	width: 1.5px;
+	width: 2px;
 	height: 20px;
-	background: var(--background-modifier-border);
+	background: var(--background-secondary);
 	margin: 0 0 0 4px;
 	flex-shrink: 0;
 }
@@ -118,6 +125,58 @@ body.obsilities-active .mod-root .workspace-tab-header-container {
 	position: relative;
 }
 
+/* Hide scrollbars app-wide while keeping scroll functionality */
+body.obsilities-hide-scrollbars * {
+	scrollbar-width: none !important;
+}
+
+body.obsilities-hide-scrollbars ::-webkit-scrollbar {
+	display: none !important;
+	width: 0 !important;
+	height: 0 !important;
+}
+
+/* Hide new tab button (desktop) */
+body.obsilities-hide-new-tab:not(.is-mobile) .workspace-tab-header-new-tab {
+	display: none !important;
+}
+
+/* Hide vault profile in side dock (desktop) */
+body.obsilities-hide-vault-profile:not(.is-mobile)
+	.workspace-sidedock-vault-profile,
+body.obsilities-hide-vault-profile:not(.is-mobile)
+	.workspace-sidedock
+	.workspace-sidedock-vault-profile,
+body.obsilities-hide-vault-profile:not(.is-mobile)
+	.workspace-sidedock
+	[class*="vault-profile"] {
+	display: none !important;
+	height: 0 !important;
+	min-height: 0 !important;
+	overflow: hidden !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	visibility: hidden !important;
+	pointer-events: none !important;
+}
+
+/* Hide external link icon */
+.external-link,
+.external-link:hover {
+	background-image: none !important;
+	padding-right: 0 !important;
+}
+
+/* Hide metadata properties heading */
+.metadata-properties-heading {
+	display: none !important;
+}
+
+/* Hide tab header tab list (desktop) */
+body:not(.is-mobile) .workspace-tab-header-tab-list {
+	display: none !important;
+}
+
 /* Settings list styling */
 .obsilities-settings-list {
 	border-top: 1px solid var(--background-modifier-border);
@@ -127,4 +186,34 @@ body.obsilities-active .mod-root .workspace-tab-header-container {
 
 .obsilities-settings-list > .setting-item {
 	border-top: none !important;
+}
+
+/* Status bar fade in/fade out transition */
+body:not(.is-mobile) {
+	--status-bar-position: absolute;
+	--status-bar-radius: var(--radius-m);
+	--status-bar-border-width: 1px;
+}
+
+body:not(.is-mobile) .status-bar {
+	transform: translateX(calc(100% + 5px));
+	transition: transform 300ms 150ms;
+	bottom: 5px;
+	right: 5px;
+	box-shadow: 0 3px 4px 0px rgba(0, 0, 0, 0.05);
+}
+
+body:not(.is-mobile) .status-bar::before {
+	width: 100%;
+	min-height: 100%;
+	content: " ";
+	position: absolute;
+	left: 0;
+	bottom: 0;
+	transform: translateX(-100%);
+}
+
+body:not(.is-mobile) .status-bar:hover {
+	transform: none;
+	transition: transform 300ms 150ms;
 }

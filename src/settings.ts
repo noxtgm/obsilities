@@ -1,5 +1,7 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
 import type ObsilitiesPlugin from "./main";
+import type { SmartTypographySettings } from "./types";
+import { DEFAULT_READABLE_LINE_WIDTH } from "./types";
 
 export class ObsilitiesSettingTab extends PluginSettingTab {
 	plugin: ObsilitiesPlugin;
@@ -19,10 +21,82 @@ export class ObsilitiesSettingTab extends PluginSettingTab {
 			cls: "obsilities-settings-list",
 		});
 
+		// General settings
+		new Setting(settingsList)
+			.setName("Readable line length")
+			.setDesc(
+				"Width of the text column, in pixels. Only applies when 'Readable line length' is enabled in Obsidian's Appearance settings.",
+			)
+			.addSlider((slider) =>
+				slider
+					.setLimits(400, 1400, 10)
+					.setValue(this.plugin.settings.readableLineWidth)
+					.setDynamicTooltip()
+					.onChange(async (value) => {
+						this.plugin.settings.readableLineWidth = value;
+						await this.plugin.saveSettings();
+						this.plugin.applyBodyClasses();
+					}),
+			)
+			.addExtraButton((button) =>
+				button
+					.setIcon("rotate-ccw")
+					.setTooltip("Restore default")
+					.onClick(async () => {
+						this.plugin.settings.readableLineWidth =
+							DEFAULT_READABLE_LINE_WIDTH;
+						await this.plugin.saveSettings();
+						this.plugin.applyBodyClasses();
+						this.display();
+					}),
+			);
+
+		new Setting(settingsList)
+			.setName("Hide scrollbars")
+			.setDesc(
+				"Hide scrollbars throughout the app. Scrolling still works via mouse wheel, trackpad, or keyboard.",
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.hideScrollbars)
+					.onChange(async (value) => {
+						this.plugin.settings.hideScrollbars = value;
+						await this.plugin.saveSettings();
+						this.plugin.applyBodyClasses();
+					}),
+			);
+
+		// Desktop-only settings
+		new Setting(settingsList)
+			.setName("Hide new tab button (Desktop)")
+			.setDesc("Hide the '+' new tab button in the tab header bar.")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.hideNewTabButton)
+					.onChange(async (value) => {
+						this.plugin.settings.hideNewTabButton = value;
+						await this.plugin.saveSettings();
+						this.plugin.applyBodyClasses();
+					}),
+			);
+
+		new Setting(settingsList)
+			.setName("Hide vault profile (Desktop)")
+			.setDesc("Hide the vault profile at the bottom of the side dock.")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.hideVaultProfile)
+					.onChange(async (value) => {
+						this.plugin.settings.hideVaultProfile = value;
+						await this.plugin.saveSettings();
+						this.plugin.applyBodyClasses();
+					}),
+			);
+
 		new Setting(settingsList)
 			.setName("Default graph view (Desktop)")
 			.setDesc(
-				"When all tabs are closed, automatically open the graph view instead of showing an empty pane."
+				"When all tabs are closed, automatically open the graph view instead of showing an empty pane.",
 			)
 			.addToggle((toggle) =>
 				toggle
@@ -30,7 +104,7 @@ export class ObsilitiesSettingTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.defaultGraphView = value;
 						await this.plugin.saveSettings();
-					})
+					}),
 			);
 
 		new Setting(containerEl).setName("Smart typography").setHeading();
@@ -43,16 +117,14 @@ export class ObsilitiesSettingTab extends PluginSettingTab {
 		new Setting(stList)
 			.setName("Dashes")
 			.setDesc(
-				"Two dash (--) will be converted to en-dash (–), en-dash + dash to em-dash (—), and em-dash + dash to three dash (---)."
+				"Two dash (--) will be converted to en-dash (–), en-dash + dash to em-dash (—), and em-dash + dash to three dash (---).",
 			)
 			.addToggle((toggle) =>
-				toggle
-					.setValue(st.emDash)
-					.onChange(async (value) => {
-						st.emDash = value;
-						await this.plugin.saveSettings();
-						this.toggleVisibility(skipEnDashEl, value);
-					})
+				toggle.setValue(st.emDash).onChange(async (value) => {
+					st.emDash = value;
+					await this.plugin.saveSettings();
+					this.toggleVisibility(skipEnDashEl, value);
+				}),
 			);
 		const skipEnDashEl = stList.createDiv({
 			cls: "obsilities-st-char-fields",
@@ -60,67 +132,63 @@ export class ObsilitiesSettingTab extends PluginSettingTab {
 		new Setting(skipEnDashEl)
 			.setName("Skip en-dash")
 			.setDesc(
-				"Two dashes will be converted to an em-dash instead of an en-dash."
+				"Two dashes will be converted to an em-dash instead of an en-dash.",
 			)
 			.addToggle((toggle) =>
-				toggle
-					.setValue(st.skipEnDash)
-					.onChange(async (value) => {
-						st.skipEnDash = value;
-						await this.plugin.saveSettings();
-					})
+				toggle.setValue(st.skipEnDash).onChange(async (value) => {
+					st.skipEnDash = value;
+					await this.plugin.saveSettings();
+				}),
 			);
 		this.toggleVisibility(skipEnDashEl, st.emDash);
 
 		new Setting(stList)
 			.setName("Ellipsis")
-			.setDesc("Three periods (...) will be converted to an ellipsis (…).")
+			.setDesc(
+				"Three periods (...) will be converted to an ellipsis (…).",
+			)
 			.addToggle((toggle) =>
-				toggle
-					.setValue(st.ellipsis)
-					.onChange(async (value) => {
-						st.ellipsis = value;
-						await this.plugin.saveSettings();
-					})
+				toggle.setValue(st.ellipsis).onChange(async (value) => {
+					st.ellipsis = value;
+					await this.plugin.saveSettings();
+				}),
 			);
 
 		new Setting(stList)
 			.setName("Fractions")
 			.setDesc(
-				"1/2, 1/3, 1/4, etc. will be converted to half (½), one-third (⅓), one-quarter (¼), and other fraction symbols."
+				"1/2, 1/3, 1/4, etc will be converted to half (½), one-third (⅓), one-quarter (¼), and other fraction symbols.",
 			)
 			.addToggle((toggle) =>
-				toggle
-					.setValue(st.fractions)
-					.onChange(async (value) => {
-						st.fractions = value;
-						await this.plugin.saveSettings();
-					})
+				toggle.setValue(st.fractions).onChange(async (value) => {
+					st.fractions = value;
+					await this.plugin.saveSettings();
+				}),
 			);
 
 		new Setting(stList)
 			.setName("Comparisons")
-			.setDesc("<= will be converted to less than or equal to (≤), >= to greater than or equal to (≥), and /= to not equal to (≠).")
+			.setDesc(
+				"<= will be converted to less than or equal to (≤), >= to greater than or equal to (≥), and /= to not equal to (≠).",
+			)
 			.addToggle((toggle) =>
-				toggle
-					.setValue(st.comparisons)
-					.onChange(async (value) => {
-						st.comparisons = value;
-						await this.plugin.saveSettings();
-					})
+				toggle.setValue(st.comparisons).onChange(async (value) => {
+					st.comparisons = value;
+					await this.plugin.saveSettings();
+				}),
 			);
 
 		new Setting(stList)
 			.setName("Guillemets")
-			.setDesc("<< and >> will be converted to guillemet marks (« and »).")
+			.setDesc(
+				"<< and >> will be converted to guillemet marks (« and »).",
+			)
 			.addToggle((toggle) =>
-				toggle
-					.setValue(st.guillemets)
-					.onChange(async (value) => {
-						st.guillemets = value;
-						await this.plugin.saveSettings();
-						this.toggleVisibility(guillemetCharsEl, value);
-					})
+				toggle.setValue(st.guillemets).onChange(async (value) => {
+					st.guillemets = value;
+					await this.plugin.saveSettings();
+					this.toggleVisibility(guillemetCharsEl, value);
+				}),
 			);
 		const guillemetCharsEl = stList.createDiv({
 			cls: "obsilities-st-char-fields",
@@ -128,87 +196,73 @@ export class ObsilitiesSettingTab extends PluginSettingTab {
 		new Setting(guillemetCharsEl)
 			.setName("Open guillemet")
 			.addText((text) =>
-				text
-					.setValue(st.openGuillemet)
-					.onChange(async (value) => {
-						if (!value) return;
-						st.openGuillemet = value;
-						await this.plugin.saveSettings();
-					})
+				text.setValue(st.openGuillemet).onChange(async (value) => {
+					if (!value) return;
+					st.openGuillemet = value;
+					await this.plugin.saveSettings();
+				}),
 			);
 		new Setting(guillemetCharsEl)
 			.setName("Close guillemet")
 			.addText((text) =>
-				text
-					.setValue(st.closeGuillemet)
-					.onChange(async (value) => {
-						if (!value) return;
-						st.closeGuillemet = value;
-						await this.plugin.saveSettings();
-					})
+				text.setValue(st.closeGuillemet).onChange(async (value) => {
+					if (!value) return;
+					st.closeGuillemet = value;
+					await this.plugin.saveSettings();
+				}),
 			);
 		this.toggleVisibility(guillemetCharsEl, st.guillemets);
 
 		new Setting(stList)
 			.setName("Arrows")
-			.setDesc("<- and -> will be converted to left and right arrows (← and →).")
+			.setDesc(
+				"<- and -> will be converted to left and right arrows (← and →).",
+			)
 			.addToggle((toggle) =>
-				toggle
-					.setValue(st.arrows)
-					.onChange(async (value) => {
-						st.arrows = value;
-						await this.plugin.saveSettings();
-						this.toggleVisibility(arrowCharsEl, value);
-					})
+				toggle.setValue(st.arrows).onChange(async (value) => {
+					st.arrows = value;
+					await this.plugin.saveSettings();
+					this.toggleVisibility(arrowCharsEl, value);
+				}),
 			);
 		const arrowCharsEl = stList.createDiv({
 			cls: "obsilities-st-char-fields",
 		});
-		new Setting(arrowCharsEl)
-			.setName("Left arrow")
-			.addText((text) =>
-				text
-					.setValue(st.leftArrow)
-					.onChange(async (value) => {
-						if (!value) return;
-						if (value.length > 1) {
-							text.setValue(value[0] ?? "");
-							return;
-						}
-						st.leftArrow = value;
-						await this.plugin.saveSettings();
-					})
-			);
-		new Setting(arrowCharsEl)
-			.setName("Right arrow")
-			.addText((text) =>
-				text
-					.setValue(st.rightArrow)
-					.onChange(async (value) => {
-						if (!value) return;
-						if (value.length > 1) {
-							text.setValue(value[0] ?? "");
-							return;
-						}
-						st.rightArrow = value;
-						await this.plugin.saveSettings();
-					})
-			);
+		new Setting(arrowCharsEl).setName("Left arrow").addText((text) =>
+			text.setValue(st.leftArrow).onChange(async (value) => {
+				if (!value) return;
+				if (value.length > 1) {
+					text.setValue(value[0] ?? "");
+					return;
+				}
+				st.leftArrow = value;
+				await this.plugin.saveSettings();
+			}),
+		);
+		new Setting(arrowCharsEl).setName("Right arrow").addText((text) =>
+			text.setValue(st.rightArrow).onChange(async (value) => {
+				if (!value) return;
+				if (value.length > 1) {
+					text.setValue(value[0] ?? "");
+					return;
+				}
+				st.rightArrow = value;
+				await this.plugin.saveSettings();
+			}),
+		);
 		this.toggleVisibility(arrowCharsEl, st.arrows);
 
 		new Setting(stList)
 			.setName("Curly quotes")
 			.setDesc(
-				'Double and single quotes will be converted to curly quotes ("" and \'\').'
+				"Double and single quotes will be converted to curly quotes (\"\" and '').",
 			)
 			.addToggle((toggle) =>
-				toggle
-					.setValue(st.curlyQuotes)
-					.onChange(async (value) => {
-						st.curlyQuotes = value;
-						await this.plugin.saveSettings();
-						this.toggleVisibility(curlyQuotesCharsEl, value);
-					})
+				toggle.setValue(st.curlyQuotes).onChange(async (value) => {
+					st.curlyQuotes = value;
+					await this.plugin.saveSettings();
+					this.toggleVisibility(curlyQuotesCharsEl, value);
+				}),
 			);
 		const curlyQuotesCharsEl = stList.createDiv({
 			cls: "obsilities-st-char-fields",
@@ -224,67 +278,51 @@ export class ObsilitiesSettingTab extends PluginSettingTab {
 
 	private addQuoteCharSettings(
 		container: HTMLElement,
-		st: import("./types").SmartTypographySettings
+		st: SmartTypographySettings,
 	): void {
-		new Setting(container)
-			.setName("Open double quote")
-			.addText((text) =>
-				text
-					.setValue(st.openDouble)
-					.onChange(async (value) => {
-						if (!value) return;
-						if (value.length > 1) {
-							text.setValue(value[0] ?? "");
-							return;
-						}
-						st.openDouble = value;
-						await this.plugin.saveSettings();
-					})
-			);
-		new Setting(container)
-			.setName("Close double quote")
-			.addText((text) =>
-				text
-					.setValue(st.closeDouble)
-					.onChange(async (value) => {
-						if (!value) return;
-						if (value.length > 1) {
-							text.setValue(value[0] ?? "");
-							return;
-						}
-						st.closeDouble = value;
-						await this.plugin.saveSettings();
-					})
-			);
-		new Setting(container)
-			.setName("Open single quote")
-			.addText((text) =>
-				text
-					.setValue(st.openSingle)
-					.onChange(async (value) => {
-						if (!value) return;
-						if (value.length > 1) {
-							text.setValue(value[0] ?? "");
-							return;
-						}
-						st.openSingle = value;
-						await this.plugin.saveSettings();
-					})
-			);
-		new Setting(container)
-			.setName("Close single quote")
-			.addText((text) =>
-				text
-					.setValue(st.closeSingle)
-					.onChange(async (value) => {
-						if (!value) return;
-						if (value.length > 1) {
-							text.setValue(value[0] ?? "");
-							return;
-						}
-						st.closeSingle = value;
-						await this.plugin.saveSettings();
-					})
-			);
+		new Setting(container).setName("Open double quote").addText((text) =>
+			text.setValue(st.openDouble).onChange(async (value) => {
+				if (!value) return;
+				if (value.length > 1) {
+					text.setValue(value[0] ?? "");
+					return;
+				}
+				st.openDouble = value;
+				await this.plugin.saveSettings();
+			}),
+		);
+		new Setting(container).setName("Close double quote").addText((text) =>
+			text.setValue(st.closeDouble).onChange(async (value) => {
+				if (!value) return;
+				if (value.length > 1) {
+					text.setValue(value[0] ?? "");
+					return;
+				}
+				st.closeDouble = value;
+				await this.plugin.saveSettings();
+			}),
+		);
+		new Setting(container).setName("Open single quote").addText((text) =>
+			text.setValue(st.openSingle).onChange(async (value) => {
+				if (!value) return;
+				if (value.length > 1) {
+					text.setValue(value[0] ?? "");
+					return;
+				}
+				st.openSingle = value;
+				await this.plugin.saveSettings();
+			}),
+		);
+		new Setting(container).setName("Close single quote").addText((text) =>
+			text.setValue(st.closeSingle).onChange(async (value) => {
+				if (!value) return;
+				if (value.length > 1) {
+					text.setValue(value[0] ?? "");
+					return;
+				}
+				st.closeSingle = value;
+				await this.plugin.saveSettings();
+			}),
+		);
 	}
 }

@@ -69,8 +69,18 @@ export const arrowRules: InputRule[] = [
 ];
 
 export const guillemetRules: InputRule[] = [
-	{ trigger: "<", from: "<<", to: (s) => s.openGuillemet, contextMatch: /<$/ },
-	{ trigger: ">", from: ">>", to: (s) => s.closeGuillemet, contextMatch: />$/ },
+	{
+		trigger: "<",
+		from: "<<",
+		to: (s) => s.openGuillemet,
+		contextMatch: /<$/,
+	},
+	{
+		trigger: ">",
+		from: ">>",
+		to: (s) => s.closeGuillemet,
+		contextMatch: />$/,
+	},
 ];
 
 export const comparisonRules: InputRule[] = [

@@ -21,13 +21,14 @@ import {
 	guillemetRules,
 	smartQuoteRules,
 } from "./inputRules";
+
 export interface SmartTypographyState {
 	inputRules: InputRule[];
 	inputRuleMap: Record<string, InputRule[]>;
 }
 
 export function buildInputRules(
-	settings: SmartTypographySettings
+	settings: SmartTypographySettings,
 ): SmartTypographyState {
 	const inputRules: InputRule[] = [];
 
@@ -81,7 +82,7 @@ export interface SmartTypographyContext {
 }
 
 export function createSmartTypographyExtension(
-	context: SmartTypographyContext
+	context: SmartTypographyContext,
 ): Extension {
 	const storeTransaction = StateEffect.define<TransactionSpec | null>();
 
@@ -167,7 +168,7 @@ export function createSmartTypographyExtension(
 					if (contextCache[fromA] === undefined) {
 						contextCache[fromA] = tr.newDoc.sliceString(
 							fromB - 3,
-							fromB
+							fromB,
 						);
 					}
 					const contextStr = contextCache[fromA];
@@ -192,7 +193,7 @@ export function createSmartTypographyExtension(
 							from: reversionPoint,
 							to: reversionPoint + insert.length,
 							insert: rule.from,
-						}
+						},
 					);
 
 					const selectionAdjustment =
@@ -201,9 +202,9 @@ export function createSmartTypographyExtension(
 						newSelection.ranges.map((r) =>
 							EditorSelection.range(
 								r.anchor - selectionAdjustment,
-								r.head - selectionAdjustment
-							)
-						)
+								r.head - selectionAdjustment,
+							),
+						),
 					);
 					if (updated) newSelection = updated;
 					return;

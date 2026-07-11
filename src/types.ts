@@ -18,7 +18,7 @@ export interface SmartTypographySettings {
 }
 
 export const DEFAULT_SMART_TYPOGRAPHY: SmartTypographySettings = {
-	curlyQuotes: true,
+	curlyQuotes: false,
 	emDash: true,
 	ellipsis: true,
 	arrows: true,
@@ -38,13 +38,23 @@ export const DEFAULT_SMART_TYPOGRAPHY: SmartTypographySettings = {
 
 export interface ObsilitiesSettings {
 	defaultGraphView: boolean;
+	readableLineWidth: number;
+	hideScrollbars: boolean;
+	hideNewTabButton: boolean;
+	hideVaultProfile: boolean;
 	hiddenHeaderButtons: Record<string, boolean>;
 	headerButtonOrder: string[];
 	smartTypography: SmartTypographySettings;
 }
 
+export const DEFAULT_READABLE_LINE_WIDTH = 900;
+
 export const DEFAULT_SETTINGS: ObsilitiesSettings = {
 	defaultGraphView: true,
+	readableLineWidth: DEFAULT_READABLE_LINE_WIDTH,
+	hideScrollbars: true,
+	hideNewTabButton: true,
+	hideVaultProfile: true,
 	hiddenHeaderButtons: {},
 	headerButtonOrder: [],
 	smartTypography: { ...DEFAULT_SMART_TYPOGRAPHY },

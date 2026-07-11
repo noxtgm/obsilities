@@ -1,4 +1,5 @@
 import { Plugin, Platform, setIcon, Menu } from "obsidian";
+import type { WorkspaceLeaf } from "obsidian";
 import type { ObsilitiesSettings } from "./types";
 import { DEFAULT_SETTINGS } from "./types";
 import { ObsilitiesSettingTab } from "./settings";
@@ -34,14 +35,14 @@ export default class ObsilitiesPlugin extends Plugin {
 			createSmartTypographyExtension({
 				getSettings: () => this.settings.smartTypography,
 				getInputRuleMap: () => this.smartTypographyState.inputRuleMap,
-			})
+			}),
 		);
 
 		this.addRibbonIcon("settings", "Open settings", () => {
-			(
-				this.app as { setting?: { open: () => void } }
-			).setting?.open();
+			(this.app as { setting?: { open: () => void } }).setting?.open();
 		});
+
+		this.applyBodyClasses();
 
 		this.app.workspace.onLayoutReady(() => {
 			if (Platform.isDesktopApp) {
@@ -53,7 +54,7 @@ export default class ObsilitiesPlugin extends Plugin {
 		this.registerEvent(
 			this.app.workspace.on("layout-change", () => {
 				this.openGraphIfEmpty();
-			})
+			}),
 		);
 
 		this.addSettingTab(new ObsilitiesSettingTab(this.app, this));
@@ -61,11 +62,36 @@ export default class ObsilitiesPlugin extends Plugin {
 
 	onunload(): void {
 		this.cleanupHeaderButtons();
+		document.body.style.removeProperty("--file-line-width");
+		document.body.classList.remove(
+			"obsilities-hide-scrollbars",
+			"obsilities-hide-new-tab",
+			"obsilities-hide-vault-profile",
+		);
+	}
+
+	applyBodyClasses(): void {
+		document.body.style.setProperty(
+			"--file-line-width",
+			`${this.settings.readableLineWidth}px`,
+		);
+		document.body.classList.toggle(
+			"obsilities-hide-scrollbars",
+			this.settings.hideScrollbars,
+		);
+		document.body.classList.toggle(
+			"obsilities-hide-new-tab",
+			this.settings.hideNewTabButton,
+		);
+		document.body.classList.toggle(
+			"obsilities-hide-vault-profile",
+			this.settings.hideVaultProfile,
+		);
 	}
 
 	buildSmartTypographyRules(): void {
 		this.smartTypographyState = buildInputRules(
-			this.settings.smartTypography
+			this.settings.smartTypography,
 		);
 	}
 
@@ -86,7 +112,7 @@ export default class ObsilitiesPlugin extends Plugin {
 		// Hide the ribbon entirely via body class
 		document.body.classList.add("obsilities-active");
 
-		// Inject overrides — high specificity to beat theme rules
+		// Inject overrides, high specificity to beat theme rules
 		this.dynamicStyleEl = document.createElement("style");
 		this.dynamicStyleEl.textContent = `
 			body.obsilities-active.obsilities-active .workspace .workspace-split .workspace-tabs .workspace-tab-container.workspace-tab-container.workspace-tab-container.workspace-tab-container {
@@ -115,7 +141,9 @@ export default class ObsilitiesPlugin extends Plugin {
 		this.headerContainer.appendChild(toggleBtn);
 
 		// Container for cloned sidebar tab headers (right after toggle)
-		this.sidebarTabsContainer = createDiv({ cls: "obsilities-sidebar-tabs" });
+		this.sidebarTabsContainer = createDiv({
+			cls: "obsilities-sidebar-tabs",
+		});
 		this.headerContainer.appendChild(this.sidebarTabsContainer);
 
 		// Separator between sidebar tabs and ribbon buttons
@@ -139,9 +167,7 @@ export default class ObsilitiesPlugin extends Plugin {
 					for (const node of Array.from(m.addedNodes)) {
 						if (node instanceof HTMLElement) {
 							// Insert before trailing separator
-							this.trailingSepEl!.before(
-								this.cloneButton(node)
-							);
+							this.trailingSepEl!.before(this.cloneButton(node));
 							this.applyButtonVisibility();
 						}
 					}
@@ -181,7 +207,9 @@ export default class ObsilitiesPlugin extends Plugin {
 		});
 
 		// Trailing separator between ribbon buttons and tabs
-		this.trailingSepEl = createDiv({ cls: "obsilities-separator-trailing" });
+		this.trailingSepEl = createDiv({
+			cls: "obsilities-separator-trailing",
+		});
 		this.headerContainer.appendChild(this.trailingSepEl);
 
 		// Insert into workspace
@@ -190,7 +218,7 @@ export default class ObsilitiesPlugin extends Plugin {
 		// Clone sidebar tab headers and watch for changes
 		this.syncSidebarTabs();
 		const sidebarTabInner = document.querySelector(
-			".mod-left-split .workspace-tab-header-container-inner"
+			".mod-left-split .workspace-tab-header-container-inner",
 		);
 		if (sidebarTabInner) {
 			this.sidebarTabsObserver = new MutationObserver(() => {
@@ -240,7 +268,7 @@ export default class ObsilitiesPlugin extends Plugin {
 		if (!this.sidebarTabsContainer) return;
 
 		const originalInner = document.querySelector(
-			".mod-left-split .workspace-tab-header-container-inner"
+			".mod-left-split .workspace-tab-header-container-inner",
 		);
 		if (!originalInner) return;
 
@@ -249,18 +277,17 @@ export default class ObsilitiesPlugin extends Plugin {
 
 		// Create a simple icon button for each tab header
 		for (const original of Array.from(
-			originalInner.children
+			originalInner.children,
 		) as HTMLElement[]) {
 			const icon = original.querySelector(
-				".workspace-tab-header-inner-icon"
+				".workspace-tab-header-inner-icon",
 			);
 			if (!icon) continue;
 
 			const btn = createDiv({
 				cls: "obsilities-sidebar-tab clickable-icon",
 				attr: {
-					"aria-label":
-						original.getAttribute("aria-label") || "",
+					"aria-label": original.getAttribute("aria-label") || "",
 				},
 			});
 			btn.innerHTML = icon.innerHTML;
@@ -299,7 +326,7 @@ export default class ObsilitiesPlugin extends Plugin {
 
 	private getDragTarget(e: DragEvent): HTMLElement | null {
 		const els = this.headerContainer?.querySelectorAll(
-			".obsilities-header-btn"
+			".obsilities-header-btn",
 		);
 		if (!els) return null;
 		for (const el of Array.from(els) as HTMLElement[]) {
@@ -333,11 +360,11 @@ export default class ObsilitiesPlugin extends Plugin {
 
 	private saveButtonOrder(): void {
 		const buttons = this.headerContainer?.querySelectorAll(
-			".obsilities-header-btn"
+			".obsilities-header-btn",
 		);
 		if (!buttons) return;
 		this.settings.headerButtonOrder = Array.from(buttons).map(
-			(btn) => btn.getAttribute("aria-label") || ""
+			(btn) => btn.getAttribute("aria-label") || "",
 		);
 		void this.saveSettings();
 	}
@@ -345,14 +372,14 @@ export default class ObsilitiesPlugin extends Plugin {
 	private showButtonToggleMenu(e: MouseEvent): void {
 		e.preventDefault();
 		const menu = new Menu();
-		const buttons =
-			this.headerContainer?.querySelectorAll(".obsilities-header-btn");
+		const buttons = this.headerContainer?.querySelectorAll(
+			".obsilities-header-btn",
+		);
 		if (!buttons?.length) return;
 
 		for (const btn of Array.from(buttons)) {
 			const label = btn.getAttribute("aria-label") || "Unknown";
-			const isHidden =
-				this.settings.hiddenHeaderButtons[label] ?? false;
+			const isHidden = this.settings.hiddenHeaderButtons[label] ?? false;
 			menu.addItem((item) => {
 				item.setTitle(label)
 					.setChecked(!isHidden)
@@ -368,13 +395,13 @@ export default class ObsilitiesPlugin extends Plugin {
 	}
 
 	applyButtonVisibility(): void {
-		const buttons =
-			this.headerContainer?.querySelectorAll(".obsilities-header-btn");
+		const buttons = this.headerContainer?.querySelectorAll(
+			".obsilities-header-btn",
+		);
 		if (!buttons) return;
 		for (const btn of Array.from(buttons)) {
 			const label = btn.getAttribute("aria-label") || "";
-			const isHidden =
-				this.settings.hiddenHeaderButtons[label] ?? false;
+			const isHidden = this.settings.hiddenHeaderButtons[label] ?? false;
 			btn.classList.toggle("obsilities-button-hidden", isHidden);
 		}
 	}
@@ -382,21 +409,20 @@ export default class ObsilitiesPlugin extends Plugin {
 	private updateLayout(): void {
 		if (!this.headerContainer) return;
 
-		const headerWidth =
-			this.headerContainer.getBoundingClientRect().width;
+		const headerWidth = this.headerContainer.getBoundingClientRect().width;
 
 		document.documentElement.style.setProperty(
 			"--obsilities-header-width",
-			`${headerWidth}px`
+			`${headerWidth}px`,
 		);
 
 		const isSidebarOpen = document.querySelector(
-			".workspace.is-left-sidedock-open"
+			".workspace.is-left-sidedock-open",
 		);
 
 		if (isSidebarOpen) {
 			const leftSplit = document.querySelector(
-				".mod-left-split"
+				".mod-left-split",
 			) as HTMLElement | null;
 			const splitWidth = leftSplit
 				? parseFloat(leftSplit.style.width) || 0
@@ -404,12 +430,12 @@ export default class ObsilitiesPlugin extends Plugin {
 			const rootExtra = Math.max(0, headerWidth - splitWidth);
 			document.documentElement.style.setProperty(
 				"--obsilities-root-extra",
-				`${rootExtra}px`
+				`${rootExtra}px`,
 			);
 		} else {
 			document.documentElement.style.setProperty(
 				"--obsilities-root-extra",
-				`${headerWidth}px`
+				`${headerWidth}px`,
 			);
 		}
 	}
@@ -434,8 +460,12 @@ export default class ObsilitiesPlugin extends Plugin {
 		this.separatorEl = null;
 		this.trailingSepEl = null;
 		this.sidebarTabsContainer = null;
-		document.documentElement.style.removeProperty("--obsilities-header-width");
-		document.documentElement.style.removeProperty("--obsilities-root-extra");
+		document.documentElement.style.removeProperty(
+			"--obsilities-header-width",
+		);
+		document.documentElement.style.removeProperty(
+			"--obsilities-root-extra",
+		);
 	}
 
 	private openGraphIfEmpty(): void {
@@ -459,15 +489,13 @@ export default class ObsilitiesPlugin extends Plugin {
 		}
 	}
 
-	private getAllLeaves(
-		parent: unknown
-	): import("obsidian").WorkspaceLeaf[] {
-		const leaves: import("obsidian").WorkspaceLeaf[] = [];
+	private getAllLeaves(parent: unknown): WorkspaceLeaf[] {
+		const leaves: WorkspaceLeaf[] = [];
 		const container = parent as { children?: unknown[] };
 		if (!container.children) return leaves;
 		for (const child of container.children) {
 			if ((child as { view?: unknown }).view) {
-				leaves.push(child as import("obsidian").WorkspaceLeaf);
+				leaves.push(child as WorkspaceLeaf);
 			} else {
 				leaves.push(...this.getAllLeaves(child));
 			}
