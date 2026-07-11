@@ -10,7 +10,7 @@
 		"version": "node version-bump.mjs && git add manifest.json versions.json"
 	},
 	"keywords": [],
-	"license": "MIT",
+	"license": "GPL-3.0",
 	"devDependencies": {
 		"@codemirror/language": "^6.0.0",
 		"@lezer/common": "^1.0.0",
