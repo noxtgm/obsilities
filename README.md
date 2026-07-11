@@ -13,7 +13,7 @@ Miscellaneous utilities and tools for [Obsidian](https://obsidian.md/) featuring
 
 ## 📄 License
 
-[MIT License](https://choosealicense.com/licenses/mit/)
+[GPL-3.0 License](https://choosealicense.com/licenses/gpl-3.0/)
 
 <br>
 
