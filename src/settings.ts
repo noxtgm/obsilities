@@ -52,6 +52,21 @@ export class ObsilitiesSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(settingsList)
+			.setName("File explorer icons")
+			.setDesc(
+				"Replace folder collapse arrows with open/closed folder icons and show type-specific icons next to files in the file explorer.",
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.fileExplorerIcons)
+					.onChange(async (value) => {
+						this.plugin.settings.fileExplorerIcons = value;
+						await this.plugin.saveSettings();
+						this.plugin.applyBodyClasses();
+					}),
+			);
+
+		new Setting(settingsList)
 			.setName("Hide scrollbars")
 			.setDesc(
 				"Hide scrollbars throughout the app. Scrolling still works via mouse wheel, trackpad, or keyboard.",

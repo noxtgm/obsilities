@@ -67,6 +67,7 @@ export default class ObsilitiesPlugin extends Plugin {
 			"obsilities-hide-scrollbars",
 			"obsilities-hide-new-tab",
 			"obsilities-hide-vault-profile",
+			"obsilities-file-icons",
 		);
 	}
 
@@ -86,6 +87,10 @@ export default class ObsilitiesPlugin extends Plugin {
 		document.body.classList.toggle(
 			"obsilities-hide-vault-profile",
 			this.settings.hideVaultProfile,
+		);
+		document.body.classList.toggle(
+			"obsilities-file-icons",
+			this.settings.fileExplorerIcons,
 		);
 	}
 

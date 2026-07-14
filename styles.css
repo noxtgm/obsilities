@@ -217,3 +217,193 @@ body:not(.is-mobile) .status-bar:hover {
 	transform: none;
 	transition: transform 300ms 150ms;
 }
+
+/* ========================= File Explorer Icons ========================= */
+/* Enabled via the "File explorer icons" setting (body.obsilities-file-icons).
+   Icons are Lucide glyphs embedded as SVG data URIs and painted through
+   currentColor via CSS masks, so they inherit the nav item's text color and
+   adapt to light/dark themes and active/hover states automatically. */
+
+body.obsilities-file-icons {
+	--obsilities-icon-folder-closed: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z'/><path d='M2 10h20'/></svg>");
+	--obsilities-icon-folder-open: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2'/></svg>");
+	--obsilities-icon-file: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z'/><path d='M14 2v5a1 1 0 0 0 1 1h5'/></svg>");
+	--obsilities-icon-file-text: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z'/><path d='M14 2v5a1 1 0 0 0 1 1h5'/><path d='M10 9H8'/><path d='M16 13H8'/><path d='M16 17H8'/></svg>");
+	--obsilities-icon-file-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z'/><path d='M14 2v5a1 1 0 0 0 1 1h5'/><circle cx='10' cy='12' r='2'/><path d='m20 17-1.296-1.296a2.41 2.41 0 0 0-3.408 0L9 22'/></svg>");
+	--obsilities-icon-file-code: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z'/><path d='M14 2v5a1 1 0 0 0 1 1h5'/><path d='M10 12.5 8 15l2 2.5'/><path d='m14 12.5 2 2.5-2 2.5'/></svg>");
+	--obsilities-icon-file-video: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z'/><path d='M14 2v5a1 1 0 0 0 1 1h5'/><path d='M15.033 13.44a.647.647 0 0 1 0 1.12l-4.065 2.352a.645.645 0 0 1-.968-.56v-4.704a.645.645 0 0 1 .967-.56z'/></svg>");
+	--obsilities-icon-file-terminal: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z'/><path d='M14 2v5a1 1 0 0 0 1 1h5'/><path d='m8 16 2-2-2-2'/><path d='M12 18h4'/></svg>");
+}
+
+/* Hide the folder collapse arrow (folder titles still toggle on click) */
+body.obsilities-file-icons .nav-folder .tree-item-icon.collapse-icon {
+	display: none !important;
+}
+
+/* Reclaim the space the collapse arrow occupied so icons sit at the edge */
+body.obsilities-file-icons .nav-folder-title,
+body.obsilities-file-icons .nav-file-title {
+	padding-inline-start: var(--size-4-1) !important;
+}
+
+/* Indent children so notes line up under their parent folder */
+body.obsilities-file-icons .tree-item-children {
+	margin-inline-start: 10px !important;
+	padding-inline-start: 10px !important;
+}
+
+/* Shared icon base: a currentColor square masked by the relevant glyph */
+body.obsilities-file-icons .nav-folder-title-content::before,
+body.obsilities-file-icons .nav-file-title-content::before {
+	content: "";
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 1em;
+	height: 1em;
+	min-width: 1em;
+	margin-right: 4px;
+	vertical-align: text-bottom;
+	background-color: currentColor;
+	-webkit-mask-size: contain;
+	mask-size: contain;
+	-webkit-mask-repeat: no-repeat;
+	mask-repeat: no-repeat;
+	-webkit-mask-position: center;
+	mask-position: center;
+}
+
+/* Folder icons — closed vs. open */
+body.obsilities-file-icons
+	.nav-folder.is-collapsed
+	> .nav-folder-title
+	.nav-folder-title-content::before {
+	-webkit-mask-image: var(--obsilities-icon-folder-closed);
+	mask-image: var(--obsilities-icon-folder-closed);
+}
+
+body.obsilities-file-icons
+	.nav-folder:not(.is-collapsed)
+	> .nav-folder-title
+	.nav-folder-title-content::before {
+	-webkit-mask-image: var(--obsilities-icon-folder-open);
+	mask-image: var(--obsilities-icon-folder-open);
+}
+
+/* Default file icon (overridden per type below) */
+body.obsilities-file-icons .nav-file-title-content::before {
+	-webkit-mask-image: var(--obsilities-icon-file);
+	mask-image: var(--obsilities-icon-file);
+}
+
+/* Text / document files */
+body.obsilities-file-icons
+	.nav-file-title:is(
+		[data-path$=".md"],
+		[data-path$=".txt"],
+		[data-path$=".rtf"],
+		[data-path$=".log"],
+		[data-path$=".csv"],
+		[data-path$=".tex"],
+		[data-path$=".org"]
+	)
+	.nav-file-title-content::before {
+	-webkit-mask-image: var(--obsilities-icon-file-text);
+	mask-image: var(--obsilities-icon-file-text);
+}
+
+/* Image files */
+body.obsilities-file-icons
+	.nav-file-title:is(
+		[data-path$=".png"],
+		[data-path$=".jpg"],
+		[data-path$=".jpeg"],
+		[data-path$=".gif"],
+		[data-path$=".svg"],
+		[data-path$=".bmp"],
+		[data-path$=".webp"],
+		[data-path$=".avif"],
+		[data-path$=".ico"],
+		[data-path$=".tiff"],
+		[data-path$=".tif"]
+	)
+	.nav-file-title-content::before {
+	-webkit-mask-image: var(--obsilities-icon-file-image);
+	mask-image: var(--obsilities-icon-file-image);
+}
+
+/* Code / markup / config files */
+body.obsilities-file-icons
+	.nav-file-title:is(
+		[data-path$=".js"],
+		[data-path$=".ts"],
+		[data-path$=".jsx"],
+		[data-path$=".tsx"],
+		[data-path$=".css"],
+		[data-path$=".scss"],
+		[data-path$=".sass"],
+		[data-path$=".less"],
+		[data-path$=".html"],
+		[data-path$=".htm"],
+		[data-path$=".xml"],
+		[data-path$=".json"],
+		[data-path$=".yaml"],
+		[data-path$=".yml"],
+		[data-path$=".toml"],
+		[data-path$=".py"],
+		[data-path$=".rb"],
+		[data-path$=".java"],
+		[data-path$=".c"],
+		[data-path$=".cpp"],
+		[data-path$=".h"],
+		[data-path$=".hpp"],
+		[data-path$=".cs"],
+		[data-path$=".go"],
+		[data-path$=".rs"],
+		[data-path$=".php"],
+		[data-path$=".lua"],
+		[data-path$=".sql"],
+		[data-path$=".r"],
+		[data-path$=".swift"],
+		[data-path$=".kt"]
+	)
+	.nav-file-title-content::before {
+	-webkit-mask-image: var(--obsilities-icon-file-code);
+	mask-image: var(--obsilities-icon-file-code);
+}
+
+/* Video files */
+body.obsilities-file-icons
+	.nav-file-title:is(
+		[data-path$=".mp4"],
+		[data-path$=".mov"],
+		[data-path$=".avi"],
+		[data-path$=".mkv"],
+		[data-path$=".webm"],
+		[data-path$=".wmv"],
+		[data-path$=".flv"],
+		[data-path$=".m4v"],
+		[data-path$=".mpeg"],
+		[data-path$=".mpg"]
+	)
+	.nav-file-title-content::before {
+	-webkit-mask-image: var(--obsilities-icon-file-video);
+	mask-image: var(--obsilities-icon-file-video);
+}
+
+/* Shell / executable files */
+body.obsilities-file-icons
+	.nav-file-title:is(
+		[data-path$=".sh"],
+		[data-path$=".bash"],
+		[data-path$=".zsh"],
+		[data-path$=".fish"],
+		[data-path$=".ps1"],
+		[data-path$=".bat"],
+		[data-path$=".cmd"],
+		[data-path$=".exe"]
+	)
+	.nav-file-title-content::before {
+	-webkit-mask-image: var(--obsilities-icon-file-terminal);
+	mask-image: var(--obsilities-icon-file-terminal);
+}

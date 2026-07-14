@@ -42,6 +42,7 @@ export interface ObsilitiesSettings {
 	hideScrollbars: boolean;
 	hideNewTabButton: boolean;
 	hideVaultProfile: boolean;
+	fileExplorerIcons: boolean;
 	hiddenHeaderButtons: Record<string, boolean>;
 	headerButtonOrder: string[];
 	smartTypography: SmartTypographySettings;
@@ -55,6 +56,7 @@ export const DEFAULT_SETTINGS: ObsilitiesSettings = {
 	hideScrollbars: true,
 	hideNewTabButton: true,
 	hideVaultProfile: true,
+	fileExplorerIcons: true,
 	hiddenHeaderButtons: {},
 	headerButtonOrder: [],
 	smartTypography: { ...DEFAULT_SMART_TYPOGRAPHY },
