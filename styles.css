@@ -10,6 +10,16 @@ body.obsilities-active:not(.is-mobile)
 	padding-bottom: 0 !important;
 }
 
+/* Square off the tab container's bottom corners when header bar is active */
+body.obsilities-active.obsilities-active
+	.workspace
+	.workspace-split
+	.workspace-tabs
+	.workspace-tab-container.workspace-tab-container.workspace-tab-container.workspace-tab-container {
+	border-bottom-left-radius: 0 !important;
+	border-bottom-right-radius: 0 !important;
+}
+
 /* Hide ribbon entirely when plugin is active */
 body.obsilities-active .workspace-ribbon.mod-left {
 	display: none !important;
@@ -161,14 +171,14 @@ body.obsilities-hide-vault-profile:not(.is-mobile)
 }
 
 /* Hide external link icon */
-.external-link,
-.external-link:hover {
+body.obsilities-hide-external-links .external-link,
+body.obsilities-hide-external-links .external-link:hover {
 	background-image: none !important;
 	padding-right: 0 !important;
 }
 
 /* Hide metadata properties heading */
-.metadata-properties-heading {
+body.obsilities-hide-properties-header .metadata-properties-heading {
 	display: none !important;
 }
 
@@ -218,11 +228,121 @@ body:not(.is-mobile) .status-bar:hover {
 	transition: transform 300ms 150ms;
 }
 
+/* ========================= Rainbow Folder Colors ======================= */
+
+body.obsilities-folder-colors {
+	--obsilities-folder-saturation: 55%;
+	--obsilities-folder-light-top: 50%; /* shallowest items lightest */
+	--obsilities-folder-light-step: 5%; /* darker per nesting level */
+}
+
+body.obsilities-folder-colors.theme-dark {
+	--obsilities-folder-saturation: 65%;
+	--obsilities-folder-light-top: 80%;
+	--obsilities-folder-light-step: 6%;
+}
+
+/* Paint every nav item that has been assigned a folder hue */
+body.obsilities-folder-colors .nav-folder-title,
+body.obsilities-folder-colors .nav-file-title {
+	color: hsl(
+		var(--obsilities-folder-hue),
+		var(--obsilities-folder-saturation),
+		var(--obsilities-folder-lightness, var(--obsilities-folder-light-top))
+	) !important;
+}
+
+body.obsilities-folder-colors .tree-item-children .nav-folder-title,
+body.obsilities-folder-colors .tree-item-children .nav-file-title {
+	--obsilities-folder-lightness: var(--obsilities-folder-light-top);
+}
+body.obsilities-folder-colors
+	.tree-item-children
+	.tree-item-children
+	.nav-folder-title,
+body.obsilities-folder-colors
+	.tree-item-children
+	.tree-item-children
+	.nav-file-title {
+	--obsilities-folder-lightness: calc(
+		var(--obsilities-folder-light-top) - 1 *
+			var(--obsilities-folder-light-step)
+	);
+}
+body.obsilities-folder-colors
+	.tree-item-children
+	.tree-item-children
+	.tree-item-children
+	.nav-folder-title,
+body.obsilities-folder-colors
+	.tree-item-children
+	.tree-item-children
+	.tree-item-children
+	.nav-file-title {
+	--obsilities-folder-lightness: calc(
+		var(--obsilities-folder-light-top) - 2 *
+			var(--obsilities-folder-light-step)
+	);
+}
+body.obsilities-folder-colors
+	.tree-item-children
+	.tree-item-children
+	.tree-item-children
+	.tree-item-children
+	.nav-folder-title,
+body.obsilities-folder-colors
+	.tree-item-children
+	.tree-item-children
+	.tree-item-children
+	.tree-item-children
+	.nav-file-title {
+	--obsilities-folder-lightness: calc(
+		var(--obsilities-folder-light-top) - 3 *
+			var(--obsilities-folder-light-step)
+	);
+}
+body.obsilities-folder-colors
+	.tree-item-children
+	.tree-item-children
+	.tree-item-children
+	.tree-item-children
+	.tree-item-children
+	.nav-folder-title,
+body.obsilities-folder-colors
+	.tree-item-children
+	.tree-item-children
+	.tree-item-children
+	.tree-item-children
+	.tree-item-children
+	.nav-file-title {
+	--obsilities-folder-lightness: calc(
+		var(--obsilities-folder-light-top) - 4 *
+			var(--obsilities-folder-light-step)
+	);
+}
+body.obsilities-folder-colors
+	.tree-item-children
+	.tree-item-children
+	.tree-item-children
+	.tree-item-children
+	.tree-item-children
+	.tree-item-children
+	.nav-folder-title,
+body.obsilities-folder-colors
+	.tree-item-children
+	.tree-item-children
+	.tree-item-children
+	.tree-item-children
+	.tree-item-children
+	.tree-item-children
+	.nav-file-title {
+	--obsilities-folder-lightness: calc(
+		var(--obsilities-folder-light-top) - 5 *
+			var(--obsilities-folder-light-step)
+	);
+}
+
 /* ========================= File Explorer Icons ========================= */
-/* Enabled via the "File explorer icons" setting (body.obsilities-file-icons).
-   Icons are Lucide glyphs embedded as SVG data URIs and painted through
-   currentColor via CSS masks, so they inherit the nav item's text color and
-   adapt to light/dark themes and active/hover states automatically. */
 
 body.obsilities-file-icons {
 	--obsilities-icon-folder-closed: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z'/><path d='M2 10h20'/></svg>");
@@ -235,12 +355,12 @@ body.obsilities-file-icons {
 	--obsilities-icon-file-terminal: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z'/><path d='M14 2v5a1 1 0 0 0 1 1h5'/><path d='m8 16 2-2-2-2'/><path d='M12 18h4'/></svg>");
 }
 
-/* Hide the folder collapse arrow (folder titles still toggle on click) */
+/* Hide folder collapse arrow (folder titles still toggle on click) */
 body.obsilities-file-icons .nav-folder .tree-item-icon.collapse-icon {
 	display: none !important;
 }
 
-/* Reclaim the space the collapse arrow occupied so icons sit at the edge */
+/* Reclaim space the collapse arrow occupied so icons sit at the edge */
 body.obsilities-file-icons .nav-folder-title,
 body.obsilities-file-icons .nav-file-title {
 	padding-inline-start: var(--size-4-1) !important;
@@ -273,7 +393,7 @@ body.obsilities-file-icons .nav-file-title-content::before {
 	mask-position: center;
 }
 
-/* Folder icons — closed vs. open */
+/* Folder icons closed */
 body.obsilities-file-icons
 	.nav-folder.is-collapsed
 	> .nav-folder-title
@@ -282,6 +402,7 @@ body.obsilities-file-icons
 	mask-image: var(--obsilities-icon-folder-closed);
 }
 
+/* Folder icons open */
 body.obsilities-file-icons
 	.nav-folder:not(.is-collapsed)
 	> .nav-folder-title

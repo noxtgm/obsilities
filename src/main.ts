@@ -1,4 +1,4 @@
-import { Plugin, Platform, setIcon, Menu } from "obsidian";
+import { Plugin, Platform, setIcon, Menu, TFolder, debounce } from "obsidian";
 import type { WorkspaceLeaf } from "obsidian";
 import type { ObsilitiesSettings } from "./types";
 import { DEFAULT_SETTINGS } from "./types";
@@ -8,6 +8,11 @@ import {
 	createSmartTypographyExtension,
 	type SmartTypographyState,
 } from "./typography/extension";
+
+interface AppInternals {
+	setting?: { open: () => void };
+	commands?: { executeCommandById?: (id: string) => void };
+}
 
 export default class ObsilitiesPlugin extends Plugin {
 	settings: ObsilitiesSettings = { ...DEFAULT_SETTINGS };
@@ -20,12 +25,17 @@ export default class ObsilitiesPlugin extends Plugin {
 	private leftSplitObserver: MutationObserver | null = null;
 	private headerResizeObserver: ResizeObserver | null = null;
 	private trailingSepEl: HTMLElement | null = null;
-	private dynamicStyleEl: HTMLStyleElement | null = null;
 	private draggedEl: HTMLElement | null = null;
+	private ribbonCloneMap: WeakMap<HTMLElement, HTMLElement> = new WeakMap();
+	private folderColorStyleEl: HTMLStyleElement | null = null;
 	private smartTypographyState: SmartTypographyState = {
 		inputRules: [],
 		inputRuleMap: {},
 	};
+
+	private get appInternals(): AppInternals {
+		return this.app as unknown as AppInternals;
+	}
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
@@ -39,7 +49,7 @@ export default class ObsilitiesPlugin extends Plugin {
 		);
 
 		this.addRibbonIcon("settings", "Open settings", () => {
-			(this.app as { setting?: { open: () => void } }).setting?.open();
+			this.appInternals.setting?.open();
 		});
 
 		this.applyBodyClasses();
@@ -49,6 +59,7 @@ export default class ObsilitiesPlugin extends Plugin {
 				this.injectHeaderButtons();
 			}
 			this.openGraphIfEmpty();
+			this.updateFolderColors();
 		});
 
 		this.registerEvent(
@@ -57,17 +68,33 @@ export default class ObsilitiesPlugin extends Plugin {
 			}),
 		);
 
+		// Rebuild folder colors when the top-level folder set may have changed
+		// updateFolderColors() no-ops when the sorted top-level names are unchanged
+		const scheduleFolderColors = debounce(
+			() => this.updateFolderColors(),
+			300,
+			true,
+		);
+		this.registerEvent(this.app.vault.on("create", scheduleFolderColors));
+		this.registerEvent(this.app.vault.on("delete", scheduleFolderColors));
+		this.registerEvent(this.app.vault.on("rename", scheduleFolderColors));
+
 		this.addSettingTab(new ObsilitiesSettingTab(this.app, this));
 	}
 
 	onunload(): void {
 		this.cleanupHeaderButtons();
+		this.folderColorStyleEl?.remove();
+		this.folderColorStyleEl = null;
 		document.body.style.removeProperty("--file-line-width");
 		document.body.classList.remove(
 			"obsilities-hide-scrollbars",
 			"obsilities-hide-new-tab",
 			"obsilities-hide-vault-profile",
+			"obsilities-hide-properties-header",
+			"obsilities-hide-external-links",
 			"obsilities-file-icons",
+			"obsilities-folder-colors",
 		);
 	}
 
@@ -89,9 +116,70 @@ export default class ObsilitiesPlugin extends Plugin {
 			this.settings.hideVaultProfile,
 		);
 		document.body.classList.toggle(
+			"obsilities-hide-properties-header",
+			this.settings.hidePropertiesHeader,
+		);
+		document.body.classList.toggle(
+			"obsilities-hide-external-links",
+			this.settings.hideExternalLinks,
+		);
+		document.body.classList.toggle(
 			"obsilities-file-icons",
 			this.settings.fileExplorerIcons,
 		);
+		document.body.classList.toggle(
+			"obsilities-folder-colors",
+			this.settings.folderColors,
+		);
+	}
+
+	// Give each top-level folder a hue drawn from a narrow gradient
+	updateFolderColors(): void {
+		if (!this.settings.folderColors) {
+			this.folderColorStyleEl?.remove();
+			this.folderColorStyleEl = null;
+			return;
+		}
+
+		const folders = this.app.vault
+			.getRoot()
+			.children.filter(
+				(child): child is TFolder => child instanceof TFolder,
+			)
+			.sort((a, b) => a.name.localeCompare(b.name));
+
+		const HUE_START = 210;
+		const HUE_SPAN = 140;
+		const count = folders.length;
+		const rules = folders.map((folder, i) => {
+			const hue =
+				count > 1
+					? Math.round(HUE_START + (HUE_SPAN / (count - 1)) * i)
+					: HUE_START;
+			const path = folder.name
+				.replace(/\\/g, "\\\\")
+				.replace(/"/g, '\\"');
+			return (
+				`body.obsilities-folder-colors .nav-folder-title[data-path="${path}"],\n` +
+				`body.obsilities-folder-colors .nav-folder-title[data-path^="${path}/"],\n` +
+				`body.obsilities-folder-colors .nav-file-title[data-path^="${path}/"] {\n` +
+				`\t--obsilities-folder-hue: ${hue};\n}`
+			);
+		});
+
+		const css = rules.join("\n\n");
+		if (
+			this.folderColorStyleEl &&
+			this.folderColorStyleEl.textContent === css
+		) {
+			return;
+		}
+		if (!this.folderColorStyleEl) {
+			this.folderColorStyleEl = document.createElement("style");
+			this.folderColorStyleEl.id = "obsilities-folder-colors";
+			document.head.appendChild(this.folderColorStyleEl);
+		}
+		this.folderColorStyleEl.textContent = css;
 	}
 
 	buildSmartTypographyRules(): void {
@@ -114,18 +202,8 @@ export default class ObsilitiesPlugin extends Plugin {
 		const workspace = document.querySelector(".workspace");
 		if (!ribbon || !workspace) return;
 
-		// Hide the ribbon entirely via body class
+		// Hide the ribbon entirely via body class (styling lives in styles.css)
 		document.body.classList.add("obsilities-active");
-
-		// Inject overrides, high specificity to beat theme rules
-		this.dynamicStyleEl = document.createElement("style");
-		this.dynamicStyleEl.textContent = `
-			body.obsilities-active.obsilities-active .workspace .workspace-split .workspace-tabs .workspace-tab-container.workspace-tab-container.workspace-tab-container.workspace-tab-container {
-				border-bottom-left-radius: 0 !important;
-				border-bottom-right-radius: 0 !important;
-			}
-		`;
-		document.head.appendChild(this.dynamicStyleEl);
 
 		// Create container in the top bar
 		this.headerContainer = createDiv({ cls: "obsilities-header-buttons" });
@@ -137,11 +215,9 @@ export default class ObsilitiesPlugin extends Plugin {
 		});
 		setIcon(toggleBtn, "sidebar-left");
 		toggleBtn.addEventListener("click", () => {
-			(
-				this.app as unknown as {
-					commands: { executeCommandById: (id: string) => void };
-				}
-			).commands.executeCommandById("app:toggle-left-sidebar");
+			this.appInternals.commands?.executeCommandById?.(
+				"app:toggle-left-sidebar",
+			);
 		});
 		this.headerContainer.appendChild(toggleBtn);
 
@@ -155,6 +231,11 @@ export default class ObsilitiesPlugin extends Plugin {
 		this.separatorEl = createDiv({ cls: "obsilities-separator" });
 		this.headerContainer.appendChild(this.separatorEl);
 
+		// Trailing separator appended now so ribbon buttons can always insert before it
+		const trailingSep = createDiv({ cls: "obsilities-separator-trailing" });
+		this.trailingSepEl = trailingSep;
+		this.headerContainer.appendChild(trailingSep);
+
 		// Clone ribbon action buttons (clones proxy clicks to originals)
 		const actions = ribbon.querySelector(".side-dock-actions");
 		if (actions) {
@@ -164,19 +245,25 @@ export default class ObsilitiesPlugin extends Plugin {
 			}
 			this.sortButtonsByOrder(clones);
 			for (const clone of clones) {
-				this.headerContainer.appendChild(clone);
+				trailingSep.before(clone);
 			}
 
 			this.ribbonObserver = new MutationObserver((mutations) => {
 				for (const m of mutations) {
 					for (const node of Array.from(m.addedNodes)) {
 						if (node instanceof HTMLElement) {
-							// Insert before trailing separator
-							this.trailingSepEl!.before(this.cloneButton(node));
-							this.applyButtonVisibility();
+							trailingSep.before(this.cloneButton(node));
+						}
+					}
+					for (const node of Array.from(m.removedNodes)) {
+						if (node instanceof HTMLElement) {
+							// Drop the clone mirroring the removed action
+							this.ribbonCloneMap.get(node)?.remove();
+							this.ribbonCloneMap.delete(node);
 						}
 					}
 				}
+				this.applyButtonVisibility();
 			});
 			this.ribbonObserver.observe(actions, { childList: true });
 		}
@@ -210,12 +297,6 @@ export default class ObsilitiesPlugin extends Plugin {
 			this.draggedEl = null;
 			this.saveButtonOrder();
 		});
-
-		// Trailing separator between ribbon buttons and tabs
-		this.trailingSepEl = createDiv({
-			cls: "obsilities-separator-trailing",
-		});
-		this.headerContainer.appendChild(this.trailingSepEl);
 
 		// Insert into workspace
 		workspace.appendChild(this.headerContainer);
@@ -295,7 +376,9 @@ export default class ObsilitiesPlugin extends Plugin {
 					"aria-label": original.getAttribute("aria-label") || "",
 				},
 			});
-			btn.innerHTML = icon.innerHTML;
+			for (const child of Array.from(icon.childNodes)) {
+				btn.appendChild(child.cloneNode(true));
+			}
 			if (original.classList.contains("is-active")) {
 				btn.classList.add("is-active");
 			}
@@ -313,6 +396,7 @@ export default class ObsilitiesPlugin extends Plugin {
 		const clone = original.cloneNode(true) as HTMLElement;
 		clone.classList.add("obsilities-header-btn");
 		clone.setAttribute("draggable", "true");
+		this.ribbonCloneMap.set(original, clone);
 		clone.addEventListener("click", (e) => {
 			e.stopPropagation();
 			original.click();
@@ -348,14 +432,22 @@ export default class ObsilitiesPlugin extends Plugin {
 		return null;
 	}
 
+	private getButtonKey(btn: Element): string {
+		const svg = btn.querySelector("svg");
+		if (svg) {
+			for (const cls of Array.from(svg.classList)) {
+				if (cls.startsWith("lucide-")) return cls;
+			}
+		}
+		return btn.getAttribute("aria-label") || "";
+	}
+
 	private sortButtonsByOrder(buttons: HTMLElement[]): void {
 		const order = this.settings.headerButtonOrder;
 		if (!order.length) return;
 		buttons.sort((a, b) => {
-			const aLabel = a.getAttribute("aria-label") || "";
-			const bLabel = b.getAttribute("aria-label") || "";
-			const aIdx = order.indexOf(aLabel);
-			const bIdx = order.indexOf(bLabel);
+			const aIdx = order.indexOf(this.getButtonKey(a));
+			const bIdx = order.indexOf(this.getButtonKey(b));
 			if (aIdx === -1 && bIdx === -1) return 0;
 			if (aIdx === -1) return 1;
 			if (bIdx === -1) return -1;
@@ -368,8 +460,8 @@ export default class ObsilitiesPlugin extends Plugin {
 			".obsilities-header-btn",
 		);
 		if (!buttons) return;
-		this.settings.headerButtonOrder = Array.from(buttons).map(
-			(btn) => btn.getAttribute("aria-label") || "",
+		this.settings.headerButtonOrder = Array.from(buttons).map((btn) =>
+			this.getButtonKey(btn),
 		);
 		void this.saveSettings();
 	}
@@ -383,13 +475,14 @@ export default class ObsilitiesPlugin extends Plugin {
 		if (!buttons?.length) return;
 
 		for (const btn of Array.from(buttons)) {
+			const key = this.getButtonKey(btn);
 			const label = btn.getAttribute("aria-label") || "Unknown";
-			const isHidden = this.settings.hiddenHeaderButtons[label] ?? false;
+			const isHidden = this.settings.hiddenHeaderButtons[key] ?? false;
 			menu.addItem((item) => {
 				item.setTitle(label)
 					.setChecked(!isHidden)
 					.onClick(async () => {
-						this.settings.hiddenHeaderButtons[label] = !isHidden;
+						this.settings.hiddenHeaderButtons[key] = !isHidden;
 						await this.saveSettings();
 						this.applyButtonVisibility();
 					});
@@ -405,8 +498,8 @@ export default class ObsilitiesPlugin extends Plugin {
 		);
 		if (!buttons) return;
 		for (const btn of Array.from(buttons)) {
-			const label = btn.getAttribute("aria-label") || "";
-			const isHidden = this.settings.hiddenHeaderButtons[label] ?? false;
+			const key = this.getButtonKey(btn);
+			const isHidden = this.settings.hiddenHeaderButtons[key] ?? false;
 			btn.classList.toggle("obsilities-button-hidden", isHidden);
 		}
 	}
@@ -458,8 +551,6 @@ export default class ObsilitiesPlugin extends Plugin {
 		this.headerResizeObserver = null;
 
 		document.body.classList.remove("obsilities-active");
-		this.dynamicStyleEl?.remove();
-		this.dynamicStyleEl = null;
 		this.headerContainer?.remove();
 		this.headerContainer = null;
 		this.separatorEl = null;

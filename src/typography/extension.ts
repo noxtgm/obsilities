@@ -165,13 +165,13 @@ export function createSmartTypographyExtension(
 				for (const rule of matchedRules) {
 					if (!canPerformReplacement(fromA)) return;
 
-					if (contextCache[fromA] === undefined) {
-						contextCache[fromA] = tr.newDoc.sliceString(
-							fromB - 3,
+					if (contextCache[fromB] === undefined) {
+						contextCache[fromB] = tr.newDoc.sliceString(
+							Math.max(0, fromB - 3),
 							fromB,
 						);
 					}
-					const contextStr = contextCache[fromA];
+					const contextStr = contextCache[fromB];
 					if (!rule.contextMatch.test(contextStr)) continue;
 
 					const insert =

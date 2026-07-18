@@ -15,7 +15,7 @@ export class ObsilitiesSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
-		new Setting(containerEl).setName("Settings").setHeading();
+		new Setting(containerEl).setName("Visibility").setHeading();
 
 		const settingsList = containerEl.createDiv({
 			cls: "obsilities-settings-list",
@@ -67,6 +67,22 @@ export class ObsilitiesSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(settingsList)
+			.setName("Rainbow folder colors")
+			.setDesc(
+				"Give each top-level folder a distinct color from a rainbow gradient and cascade it to every nested folder and file.",
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.folderColors)
+					.onChange(async (value) => {
+						this.plugin.settings.folderColors = value;
+						await this.plugin.saveSettings();
+						this.plugin.applyBodyClasses();
+						this.plugin.updateFolderColors();
+					}),
+			);
+
+		new Setting(settingsList)
 			.setName("Hide scrollbars")
 			.setDesc(
 				"Hide scrollbars throughout the app. Scrolling still works via mouse wheel, trackpad, or keyboard.",
@@ -76,6 +92,36 @@ export class ObsilitiesSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.hideScrollbars)
 					.onChange(async (value) => {
 						this.plugin.settings.hideScrollbars = value;
+						await this.plugin.saveSettings();
+						this.plugin.applyBodyClasses();
+					}),
+			);
+
+		new Setting(settingsList)
+			.setName("Hide properties header")
+			.setDesc(
+				"Hide the properties heading shown above a note's frontmatter.",
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.hidePropertiesHeader)
+					.onChange(async (value) => {
+						this.plugin.settings.hidePropertiesHeader = value;
+						await this.plugin.saveSettings();
+						this.plugin.applyBodyClasses();
+					}),
+			);
+
+		new Setting(settingsList)
+			.setName("Hide external link icons")
+			.setDesc(
+				"Hide the arrow icon shown next to external links in notes.",
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.hideExternalLinks)
+					.onChange(async (value) => {
+						this.plugin.settings.hideExternalLinks = value;
 						await this.plugin.saveSettings();
 						this.plugin.applyBodyClasses();
 					}),
@@ -122,7 +168,7 @@ export class ObsilitiesSettingTab extends PluginSettingTab {
 					}),
 			);
 
-		new Setting(containerEl).setName("Smart typography").setHeading();
+		new Setting(containerEl).setName("Typography").setHeading();
 
 		const st = this.plugin.settings.smartTypography;
 		const stList = containerEl.createDiv({
