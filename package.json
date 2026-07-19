@@ -1,6 +1,6 @@
 {
 	"name": "obsilities",
-	"version": "1.2.0",
+	"version": "1.3.0",
 	"description": "Miscellaneous utilities and tools.",
 	"main": "main.js",
 	"type": "module",
