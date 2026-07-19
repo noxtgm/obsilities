@@ -2,7 +2,7 @@
 	"id": "obsilities",
 	"name": "Obsilities",
 	"version": "1.2.0",
-	"minAppVersion": "0.15.0",
+	"minAppVersion": "1.10.0",
 	"description": "Miscellaneous utilities and tools.",
 	"author": "noxtgm",
 	"authorUrl": "https://noxtgm.me",

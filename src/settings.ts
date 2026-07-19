@@ -142,6 +142,21 @@ export class ObsilitiesSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(settingsList)
+			.setName("Hide tab list button (Desktop)")
+			.setDesc(
+				"Hide the button that opens the dropdown list of all open tabs in the tab header bar.",
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.hideTabList)
+					.onChange(async (value) => {
+						this.plugin.settings.hideTabList = value;
+						await this.plugin.saveSettings();
+						this.plugin.applyBodyClasses();
+					}),
+			);
+
+		new Setting(settingsList)
 			.setName("Hide vault profile (Desktop)")
 			.setDesc("Hide the vault profile at the bottom of the side dock.")
 			.addToggle((toggle) =>
@@ -254,24 +269,22 @@ export class ObsilitiesSettingTab extends PluginSettingTab {
 		const guillemetCharsEl = stList.createDiv({
 			cls: "obsilities-st-char-fields",
 		});
-		new Setting(guillemetCharsEl)
-			.setName("Open guillemet")
-			.addText((text) =>
-				text.setValue(st.openGuillemet).onChange(async (value) => {
-					if (!value) return;
-					st.openGuillemet = value;
-					await this.plugin.saveSettings();
-				}),
-			);
-		new Setting(guillemetCharsEl)
-			.setName("Close guillemet")
-			.addText((text) =>
-				text.setValue(st.closeGuillemet).onChange(async (value) => {
-					if (!value) return;
-					st.closeGuillemet = value;
-					await this.plugin.saveSettings();
-				}),
-			);
+		this.addSingleCharText(
+			guillemetCharsEl,
+			"Open guillemet",
+			() => st.openGuillemet,
+			(v) => {
+				st.openGuillemet = v;
+			},
+		);
+		this.addSingleCharText(
+			guillemetCharsEl,
+			"Close guillemet",
+			() => st.closeGuillemet,
+			(v) => {
+				st.closeGuillemet = v;
+			},
+		);
 		this.toggleVisibility(guillemetCharsEl, st.guillemets);
 
 		new Setting(stList)
@@ -289,27 +302,21 @@ export class ObsilitiesSettingTab extends PluginSettingTab {
 		const arrowCharsEl = stList.createDiv({
 			cls: "obsilities-st-char-fields",
 		});
-		new Setting(arrowCharsEl).setName("Left arrow").addText((text) =>
-			text.setValue(st.leftArrow).onChange(async (value) => {
-				if (!value) return;
-				if (value.length > 1) {
-					text.setValue(value[0] ?? "");
-					return;
-				}
-				st.leftArrow = value;
-				await this.plugin.saveSettings();
-			}),
+		this.addSingleCharText(
+			arrowCharsEl,
+			"Left arrow",
+			() => st.leftArrow,
+			(v) => {
+				st.leftArrow = v;
+			},
 		);
-		new Setting(arrowCharsEl).setName("Right arrow").addText((text) =>
-			text.setValue(st.rightArrow).onChange(async (value) => {
-				if (!value) return;
-				if (value.length > 1) {
-					text.setValue(value[0] ?? "");
-					return;
-				}
-				st.rightArrow = value;
-				await this.plugin.saveSettings();
-			}),
+		this.addSingleCharText(
+			arrowCharsEl,
+			"Right arrow",
+			() => st.rightArrow,
+			(v) => {
+				st.rightArrow = v;
+			},
 		);
 		this.toggleVisibility(arrowCharsEl, st.arrows);
 
@@ -341,47 +348,54 @@ export class ObsilitiesSettingTab extends PluginSettingTab {
 		container: HTMLElement,
 		st: SmartTypographySettings,
 	): void {
-		new Setting(container).setName("Open double quote").addText((text) =>
-			text.setValue(st.openDouble).onChange(async (value) => {
-				if (!value) return;
-				if (value.length > 1) {
-					text.setValue(value[0] ?? "");
-					return;
-				}
-				st.openDouble = value;
-				await this.plugin.saveSettings();
-			}),
+		this.addSingleCharText(
+			container,
+			"Open double quote",
+			() => st.openDouble,
+			(v) => {
+				st.openDouble = v;
+			},
 		);
-		new Setting(container).setName("Close double quote").addText((text) =>
-			text.setValue(st.closeDouble).onChange(async (value) => {
-				if (!value) return;
-				if (value.length > 1) {
-					text.setValue(value[0] ?? "");
-					return;
-				}
-				st.closeDouble = value;
-				await this.plugin.saveSettings();
-			}),
+		this.addSingleCharText(
+			container,
+			"Close double quote",
+			() => st.closeDouble,
+			(v) => {
+				st.closeDouble = v;
+			},
 		);
-		new Setting(container).setName("Open single quote").addText((text) =>
-			text.setValue(st.openSingle).onChange(async (value) => {
-				if (!value) return;
-				if (value.length > 1) {
-					text.setValue(value[0] ?? "");
-					return;
-				}
-				st.openSingle = value;
-				await this.plugin.saveSettings();
-			}),
+		this.addSingleCharText(
+			container,
+			"Open single quote",
+			() => st.openSingle,
+			(v) => {
+				st.openSingle = v;
+			},
 		);
-		new Setting(container).setName("Close single quote").addText((text) =>
-			text.setValue(st.closeSingle).onChange(async (value) => {
+		this.addSingleCharText(
+			container,
+			"Close single quote",
+			() => st.closeSingle,
+			(v) => {
+				st.closeSingle = v;
+			},
+		);
+	}
+
+	private addSingleCharText(
+		container: HTMLElement,
+		name: string,
+		get: () => string,
+		set: (value: string) => void,
+	): void {
+		new Setting(container).setName(name).addText((text) =>
+			text.setValue(get()).onChange(async (value) => {
 				if (!value) return;
 				if (value.length > 1) {
 					text.setValue(value[0] ?? "");
 					return;
 				}
-				st.closeSingle = value;
+				set(value);
 				await this.plugin.saveSettings();
 			}),
 		);

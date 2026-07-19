@@ -1,7 +1,6 @@
 import { Plugin, Platform, setIcon, Menu, TFolder, debounce } from "obsidian";
-import type { WorkspaceLeaf } from "obsidian";
-import type { ObsilitiesSettings } from "./types";
-import { DEFAULT_SETTINGS } from "./types";
+import { DEFAULT_SETTINGS, DEFAULT_SMART_TYPOGRAPHY } from "./types";
+import { KANBAN_VIEW_TYPE, KanbanView } from "./bases/kanban";
 import { ObsilitiesSettingTab } from "./settings";
 import {
 	buildInputRules,
@@ -9,10 +8,27 @@ import {
 	type SmartTypographyState,
 } from "./typography/extension";
 
+import type { WorkspaceLeaf } from "obsidian";
+import type { ObsilitiesSettings } from "./types";
+
 interface AppInternals {
 	setting?: { open: () => void };
-	commands?: { executeCommandById?: (id: string) => void };
 }
+
+type BasesCapablePlugin = Plugin & {
+	registerBasesView?: (
+		viewId: string,
+		registration: {
+			name: string;
+			icon: string;
+			factory: (
+				controller: ConstructorParameters<typeof KanbanView>[0],
+				containerEl: HTMLElement,
+			) => KanbanView;
+			options: typeof KanbanView.getViewOptions;
+		},
+	) => boolean;
+};
 
 export default class ObsilitiesPlugin extends Plugin {
 	settings: ObsilitiesSettings = { ...DEFAULT_SETTINGS };
@@ -24,7 +40,8 @@ export default class ObsilitiesPlugin extends Plugin {
 	private sidebarTabsObserver: MutationObserver | null = null;
 	private leftSplitObserver: MutationObserver | null = null;
 	private headerResizeObserver: ResizeObserver | null = null;
-	private trailingSepEl: HTMLElement | null = null;
+	private initialLayoutRaf: number | null = null;
+	private initialLayoutTimeout: number | null = null;
 	private draggedEl: HTMLElement | null = null;
 	private ribbonCloneMap: WeakMap<HTMLElement, HTMLElement> = new WeakMap();
 	private folderColorStyleEl: HTMLStyleElement | null = null;
@@ -39,6 +56,8 @@ export default class ObsilitiesPlugin extends Plugin {
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
+
+		this.registerKanbanBasesView();
 
 		this.buildSmartTypographyRules();
 		this.registerEditorExtension(
@@ -90,12 +109,25 @@ export default class ObsilitiesPlugin extends Plugin {
 		document.body.classList.remove(
 			"obsilities-hide-scrollbars",
 			"obsilities-hide-new-tab",
+			"obsilities-hide-tab-list",
 			"obsilities-hide-vault-profile",
 			"obsilities-hide-properties-header",
 			"obsilities-hide-external-links",
 			"obsilities-file-icons",
 			"obsilities-folder-colors",
 		);
+	}
+
+	private registerKanbanBasesView(): void {
+		const register = (this as BasesCapablePlugin).registerBasesView;
+		if (typeof register !== "function") return;
+		register.call(this, KANBAN_VIEW_TYPE, {
+			name: "Kanban",
+			icon: "square-kanban",
+			factory: (controller, containerEl) =>
+				new KanbanView(controller, containerEl),
+			options: KanbanView.getViewOptions,
+		});
 	}
 
 	applyBodyClasses(): void {
@@ -110,6 +142,10 @@ export default class ObsilitiesPlugin extends Plugin {
 		document.body.classList.toggle(
 			"obsilities-hide-new-tab",
 			this.settings.hideNewTabButton,
+		);
+		document.body.classList.toggle(
+			"obsilities-hide-tab-list",
+			this.settings.hideTabList,
 		);
 		document.body.classList.toggle(
 			"obsilities-hide-vault-profile",
@@ -189,7 +225,16 @@ export default class ObsilitiesPlugin extends Plugin {
 	}
 
 	async loadSettings(): Promise<void> {
-		this.settings = { ...DEFAULT_SETTINGS, ...(await this.loadData()) };
+		const saved =
+			(await this.loadData()) as Partial<ObsilitiesSettings> | null;
+		this.settings = {
+			...DEFAULT_SETTINGS,
+			...saved,
+			smartTypography: {
+				...DEFAULT_SMART_TYPOGRAPHY,
+				...saved?.smartTypography,
+			},
+		};
 	}
 
 	async saveSettings(): Promise<void> {
@@ -215,9 +260,7 @@ export default class ObsilitiesPlugin extends Plugin {
 		});
 		setIcon(toggleBtn, "sidebar-left");
 		toggleBtn.addEventListener("click", () => {
-			this.appInternals.commands?.executeCommandById?.(
-				"app:toggle-left-sidebar",
-			);
+			this.app.workspace.leftSplit.toggle();
 		});
 		this.headerContainer.appendChild(toggleBtn);
 
@@ -233,7 +276,6 @@ export default class ObsilitiesPlugin extends Plugin {
 
 		// Trailing separator appended now so ribbon buttons can always insert before it
 		const trailingSep = createDiv({ cls: "obsilities-separator-trailing" });
-		this.trailingSepEl = trailingSep;
 		this.headerContainer.appendChild(trailingSep);
 
 		// Clone ribbon action buttons (clones proxy clicks to originals)
@@ -346,8 +388,14 @@ export default class ObsilitiesPlugin extends Plugin {
 		});
 
 		// Initial layout
-		requestAnimationFrame(() => this.updateLayout());
-		setTimeout(() => this.updateLayout(), 100);
+		this.initialLayoutRaf = window.requestAnimationFrame(() => {
+			this.initialLayoutRaf = null;
+			this.updateLayout();
+		});
+		this.initialLayoutTimeout = window.setTimeout(() => {
+			this.initialLayoutTimeout = null;
+			this.updateLayout();
+		}, 100);
 	}
 
 	private syncSidebarTabs(): void {
@@ -549,12 +597,19 @@ export default class ObsilitiesPlugin extends Plugin {
 		this.leftSplitObserver = null;
 		this.headerResizeObserver?.disconnect();
 		this.headerResizeObserver = null;
+		if (this.initialLayoutRaf !== null) {
+			window.cancelAnimationFrame(this.initialLayoutRaf);
+			this.initialLayoutRaf = null;
+		}
+		if (this.initialLayoutTimeout !== null) {
+			window.clearTimeout(this.initialLayoutTimeout);
+			this.initialLayoutTimeout = null;
+		}
 
 		document.body.classList.remove("obsilities-active");
 		this.headerContainer?.remove();
 		this.headerContainer = null;
 		this.separatorEl = null;
-		this.trailingSepEl = null;
 		this.sidebarTabsContainer = null;
 		document.documentElement.style.removeProperty(
 			"--obsilities-header-width",
@@ -568,34 +623,18 @@ export default class ObsilitiesPlugin extends Plugin {
 		if (!Platform.isDesktopApp) return;
 		if (!this.settings.defaultGraphView) return;
 
-		const leaves = this.app.workspace.getLeavesOfType("empty");
-		if (leaves.length === 0) return;
+		const rootLeaves: WorkspaceLeaf[] = [];
+		this.app.workspace.iterateRootLeaves((leaf) => {
+			rootLeaves.push(leaf);
+		});
+		if (rootLeaves.length === 0) return;
 
-		const rootLeaves = this.app.workspace.rootSplit
-			? this.getAllLeaves(this.app.workspace.rootSplit)
-			: [];
-		const allEmpty =
-			rootLeaves.length > 0 &&
-			rootLeaves.every((l) => l.view?.getViewType() === "empty");
+		const allEmpty = rootLeaves.every(
+			(leaf) => leaf.view?.getViewType() === "empty",
+		);
 		if (!allEmpty) return;
 
-		const leaf = leaves[0];
-		if (leaf) {
-			void leaf.setViewState({ type: "graph", active: true });
-		}
-	}
-
-	private getAllLeaves(parent: unknown): WorkspaceLeaf[] {
-		const leaves: WorkspaceLeaf[] = [];
-		const container = parent as { children?: unknown[] };
-		if (!container.children) return leaves;
-		for (const child of container.children) {
-			if ((child as { view?: unknown }).view) {
-				leaves.push(child as WorkspaceLeaf);
-			} else {
-				leaves.push(...this.getAllLeaves(child));
-			}
-		}
-		return leaves;
+		const first = rootLeaves[0];
+		if (first) void first.setViewState({ type: "graph", active: true });
 	}
 }

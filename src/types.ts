@@ -41,6 +41,7 @@ export interface ObsilitiesSettings {
 	readableLineWidth: number;
 	hideScrollbars: boolean;
 	hideNewTabButton: boolean;
+	hideTabList: boolean;
 	hideVaultProfile: boolean;
 	hidePropertiesHeader: boolean;
 	hideExternalLinks: boolean;
@@ -55,13 +56,14 @@ export const DEFAULT_READABLE_LINE_WIDTH = 900;
 export const DEFAULT_SETTINGS: ObsilitiesSettings = {
 	defaultGraphView: true,
 	readableLineWidth: DEFAULT_READABLE_LINE_WIDTH,
+	fileExplorerIcons: true,
+	folderColors: true,
 	hideScrollbars: true,
 	hideNewTabButton: true,
+	hideTabList: true,
 	hideVaultProfile: true,
 	hidePropertiesHeader: true,
 	hideExternalLinks: true,
-	fileExplorerIcons: true,
-	folderColors: false,
 	hiddenHeaderButtons: {},
 	headerButtonOrder: [],
 	smartTypography: { ...DEFAULT_SMART_TYPOGRAPHY },
