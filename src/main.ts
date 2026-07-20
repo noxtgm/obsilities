@@ -1,6 +1,8 @@
 import { Plugin, Platform, setIcon, Menu, TFolder, debounce } from "obsidian";
 import { DEFAULT_SETTINGS, DEFAULT_SMART_TYPOGRAPHY } from "./types";
 import { KANBAN_VIEW_TYPE, KanbanView } from "./bases/kanban";
+import { CALENDAR_VIEW_TYPE } from "./bases/calendar/types";
+import { CalendarView } from "./bases/calendar/view";
 import { ObsilitiesSettingTab } from "./settings";
 import {
 	buildInputRules,
@@ -8,25 +10,32 @@ import {
 	type SmartTypographyState,
 } from "./typography/extension";
 
-import type { WorkspaceLeaf } from "obsidian";
+import type {
+	BasesOptions,
+	BasesView,
+	QueryController,
+	WorkspaceLeaf,
+} from "obsidian";
 import type { ObsilitiesSettings } from "./types";
 
 interface AppInternals {
 	setting?: { open: () => void };
 }
 
+interface BasesViewRegistration {
+	name: string;
+	icon: string;
+	factory: (
+		controller: QueryController,
+		containerEl: HTMLElement,
+	) => BasesView;
+	options: (this: void) => BasesOptions[];
+}
+
 type BasesCapablePlugin = Plugin & {
 	registerBasesView?: (
 		viewId: string,
-		registration: {
-			name: string;
-			icon: string;
-			factory: (
-				controller: ConstructorParameters<typeof KanbanView>[0],
-				containerEl: HTMLElement,
-			) => KanbanView;
-			options: typeof KanbanView.getViewOptions;
-		},
+		registration: BasesViewRegistration,
 	) => boolean;
 };
 
@@ -58,6 +67,7 @@ export default class ObsilitiesPlugin extends Plugin {
 		await this.loadSettings();
 
 		this.registerKanbanBasesView();
+		this.registerCalendarBasesView();
 
 		this.buildSmartTypographyRules();
 		this.registerEditorExtension(
@@ -127,6 +137,18 @@ export default class ObsilitiesPlugin extends Plugin {
 			factory: (controller, containerEl) =>
 				new KanbanView(controller, containerEl),
 			options: KanbanView.getViewOptions,
+		});
+	}
+
+	private registerCalendarBasesView(): void {
+		const register = (this as BasesCapablePlugin).registerBasesView;
+		if (typeof register !== "function") return;
+		register.call(this, CALENDAR_VIEW_TYPE, {
+			name: "Calendar",
+			icon: "calendar",
+			factory: (controller, containerEl) =>
+				new CalendarView(controller, containerEl),
+			options: CalendarView.getViewOptions,
 		});
 	}
 

@@ -6,7 +6,7 @@
 node_modules
 main.js
 
-# Exclude sourcemaps
+# Sourcemaps
 *.map
 
 # Obsidian

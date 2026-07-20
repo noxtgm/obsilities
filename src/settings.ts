@@ -15,13 +15,14 @@ export class ObsilitiesSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
+		/* Visibility settings */
+
 		new Setting(containerEl).setName("Visibility").setHeading();
 
 		const settingsList = containerEl.createDiv({
 			cls: "obsilities-settings-list",
 		});
 
-		// General settings
 		new Setting(settingsList)
 			.setName("Readable line length")
 			.setDesc(
@@ -127,7 +128,8 @@ export class ObsilitiesSettingTab extends PluginSettingTab {
 					}),
 			);
 
-		// Desktop-only settings
+		/* Visibility desktop-only settings */
+
 		new Setting(settingsList)
 			.setName("Hide new tab button (Desktop)")
 			.setDesc("Hide the '+' new tab button in the tab header bar.")
@@ -182,6 +184,8 @@ export class ObsilitiesSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					}),
 			);
+
+		/* Typography settings */
 
 		new Setting(containerEl).setName("Typography").setHeading();
 

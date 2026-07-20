@@ -44,24 +44,24 @@ export function buildInputRules(
 		inputRules.push(...ellipsisRules);
 	}
 
-	if (settings.curlyQuotes) {
-		inputRules.push(...smartQuoteRules);
-	}
-
-	if (settings.arrows) {
-		inputRules.push(...arrowRules);
-	}
-
-	if (settings.guillemets) {
-		inputRules.push(...guillemetRules);
+	if (settings.fractions) {
+		inputRules.push(...fractionRules);
 	}
 
 	if (settings.comparisons) {
 		inputRules.push(...comparisonRules);
 	}
 
-	if (settings.fractions) {
-		inputRules.push(...fractionRules);
+	if (settings.guillemets) {
+		inputRules.push(...guillemetRules);
+	}
+
+	if (settings.arrows) {
+		inputRules.push(...arrowRules);
+	}
+
+	if (settings.curlyQuotes) {
+		inputRules.push(...smartQuoteRules);
 	}
 
 	const inputRuleMap: Record<string, InputRule[]> = {};
