@@ -1301,6 +1301,16 @@ body.obsilities-file-icons
 	opacity: 0.4;
 }
 
+.obsilities-calendar-event.is-continued-before {
+	border-top-left-radius: 0;
+	border-top-right-radius: 0;
+}
+
+.obsilities-calendar-event.is-continued-after {
+	border-bottom-left-radius: 0;
+	border-bottom-right-radius: 0;
+}
+
 .obsilities-calendar-event-time {
 	color: var(--text-muted);
 	font-variant-numeric: tabular-nums;
