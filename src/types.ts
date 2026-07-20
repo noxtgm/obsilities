@@ -1,70 +1,70 @@
 export interface SmartTypographySettings {
-	curlyQuotes: boolean;
 	emDash: boolean;
-	ellipsis: boolean;
-	arrows: boolean;
-	guillemets: boolean;
-	comparisons: boolean;
-	fractions: boolean;
 	skipEnDash: boolean;
-	openSingle: string;
-	closeSingle: string;
-	openDouble: string;
-	closeDouble: string;
+	ellipsis: boolean;
+	fractions: boolean;
+	comparisons: boolean;
+	guillemets: boolean;
 	openGuillemet: string;
 	closeGuillemet: string;
+	arrows: boolean;
 	leftArrow: string;
 	rightArrow: string;
+	curlyQuotes: boolean;
+	openDouble: string;
+	closeDouble: string;
+	openSingle: string;
+	closeSingle: string;
 }
 
 export const DEFAULT_SMART_TYPOGRAPHY: SmartTypographySettings = {
-	curlyQuotes: false,
 	emDash: true,
-	ellipsis: true,
-	arrows: true,
-	guillemets: true,
-	comparisons: true,
-	fractions: true,
 	skipEnDash: false,
-	openSingle: "\u2018",
-	closeSingle: "\u2019",
-	openDouble: "\u201C",
-	closeDouble: "\u201D",
+	ellipsis: true,
+	fractions: true,
+	comparisons: true,
+	guillemets: true,
 	openGuillemet: "«",
 	closeGuillemet: "»",
+	arrows: true,
 	leftArrow: "←",
 	rightArrow: "→",
+	curlyQuotes: false,
+	openDouble: "\u201C",
+	closeDouble: "\u201D",
+	openSingle: "\u2018",
+	closeSingle: "\u2019",
 };
 
 export interface ObsilitiesSettings {
-	defaultGraphView: boolean;
 	readableLineWidth: number;
+	fileExplorerIcons: boolean;
+	folderColors: boolean;
 	hideScrollbars: boolean;
+	hidePropertiesHeader: boolean;
+	hideExternalLinks: boolean;
 	hideNewTabButton: boolean;
 	hideTabList: boolean;
 	hideVaultProfile: boolean;
-	hidePropertiesHeader: boolean;
-	hideExternalLinks: boolean;
-	fileExplorerIcons: boolean;
-	folderColors: boolean;
-	hiddenHeaderButtons: Record<string, boolean>;
+	defaultGraphView: boolean;
 	headerButtonOrder: string[];
+	hiddenHeaderButtons: Record<string, boolean>;
 	smartTypography: SmartTypographySettings;
 }
 
 export const DEFAULT_READABLE_LINE_WIDTH = 900;
 export const DEFAULT_SETTINGS: ObsilitiesSettings = {
-	defaultGraphView: true,
 	readableLineWidth: DEFAULT_READABLE_LINE_WIDTH,
 	fileExplorerIcons: true,
 	folderColors: true,
 	hideScrollbars: true,
+	hidePropertiesHeader: true,
+	hideExternalLinks: true,
 	hideNewTabButton: true,
 	hideTabList: true,
 	hideVaultProfile: true,
-	hidePropertiesHeader: true,
-	hideExternalLinks: true,
-	hiddenHeaderButtons: {},
+	defaultGraphView: true,
 	headerButtonOrder: [],
+	hiddenHeaderButtons: {},
 	smartTypography: { ...DEFAULT_SMART_TYPOGRAPHY },
 };
