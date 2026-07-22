@@ -388,7 +388,6 @@ export class CalendarView extends BasesView {
 			setDragging: (active) => {
 				this.dragging = active;
 			},
-			isDragging: () => this.dragging,
 		};
 	}
 

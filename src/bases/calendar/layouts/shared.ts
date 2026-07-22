@@ -1,8 +1,9 @@
 import { Keymap } from "obsidian";
-import { addDays, startOfDay, toLocalISODate } from "../dates";
+import { addDays, formatTime, startOfDay, toLocalISODate } from "../dates";
 import type { CalendarEvent, LayoutContext } from "../types";
 
 const MAX_SPAN_DAYS = 366;
+const DRAG_THRESHOLD = 4;
 
 export function sortEvents(a: CalendarEvent, b: CalendarEvent): number {
 	if (a.allDay !== b.allDay) return a.allDay ? -1 : 1;
@@ -59,41 +60,112 @@ export function groupByDay(
 	return map;
 }
 
+export interface DragSpec {
+	onMove: (clientX: number, clientY: number) => void;
+	onDrop: (clientX: number, clientY: number) => void;
+	onEnd: () => void;
+}
+
 export function attachChipInteractions(
 	chip: HTMLElement,
 	event: CalendarEvent,
 	ctx: LayoutContext,
-	onDragStart: () => void,
-	onDragEnd: () => void,
-	draggable = true,
+	drag: DragSpec | null,
 ): void {
-	chip.addEventListener("click", (e) => {
-		if (ctx.callbacks.isDragging()) return;
-		e.stopPropagation();
-		ctx.callbacks.open(event.path, !!Keymap.isModEvent(e));
-	});
-
 	chip.addEventListener("auxclick", (e) => {
 		if (e.button !== 1) return;
 		e.preventDefault();
 		ctx.callbacks.openBackground(event.path);
 	});
 
-	if (!draggable) return;
+	if (!drag) {
+		chip.addEventListener("click", (e) => {
+			e.stopPropagation();
+			ctx.callbacks.open(event.path, !!Keymap.isModEvent(e));
+		});
+		return;
+	}
 
-	chip.setAttribute("draggable", "true");
+	const root = chip.closest<HTMLElement>(".obsilities-calendar");
 
-	chip.addEventListener("dragstart", (e) => {
-		ctx.callbacks.setDragging(true);
-		onDragStart();
-		e.dataTransfer?.setData("text/plain", event.path);
-		if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
-		window.setTimeout(() => chip.addClass("is-dragging"), 0);
+	chip.addEventListener("pointerdown", (e) => {
+		if (e.button !== 0) return;
+		e.preventDefault();
+		const startX = e.clientX;
+		const startY = e.clientY;
+		const doc = chip.doc;
+		let dragging = false;
+
+		const begin = (): void => {
+			dragging = true;
+			ctx.callbacks.setDragging(true);
+			chip.addClass("is-dragging");
+			root?.addClass("is-dragging-active");
+		};
+
+		const end = (): void => {
+			chip.removeClass("is-dragging");
+			root?.removeClass("is-dragging-active");
+			drag.onEnd();
+			ctx.callbacks.setDragging(false);
+		};
+
+		const cleanup = (): void => {
+			doc.removeEventListener("pointermove", onMove);
+			doc.removeEventListener("pointerup", onUp);
+			doc.removeEventListener("pointercancel", onCancel);
+		};
+
+		const onMove = (move: PointerEvent): void => {
+			if (!dragging) {
+				if (
+					Math.abs(move.clientX - startX) < DRAG_THRESHOLD &&
+					Math.abs(move.clientY - startY) < DRAG_THRESHOLD
+				) {
+					return;
+				}
+				begin();
+			}
+			drag.onMove(move.clientX, move.clientY);
+		};
+
+		const onUp = (up: PointerEvent): void => {
+			cleanup();
+			if (dragging) {
+				drag.onDrop(up.clientX, up.clientY);
+				end();
+			} else {
+				ctx.callbacks.open(event.path, !!Keymap.isModEvent(up));
+			}
+		};
+
+		const onCancel = (): void => {
+			cleanup();
+			if (dragging) end();
+		};
+
+		doc.addEventListener("pointermove", onMove);
+		doc.addEventListener("pointerup", onUp);
+		doc.addEventListener("pointercancel", onCancel);
 	});
+}
 
-	chip.addEventListener("dragend", () => {
-		chip.removeClass("is-dragging");
-		ctx.callbacks.setDragging(false);
-		onDragEnd();
+export function buildPreviewChip(
+	event: CalendarEvent,
+	allDay: boolean,
+): HTMLElement {
+	const chip = createDiv({ cls: "obsilities-calendar-chip is-preview" });
+	if (allDay || event.allDay) {
+		chip.addClass("is-allday");
+	} else {
+		chip.createSpan({
+			cls: "obsilities-calendar-chip-time",
+			text: formatTime(event.start),
+		});
+	}
+	chip.createSpan({
+		cls: "obsilities-calendar-chip-title",
+		text: event.title,
 	});
+	return chip;
 }

@@ -914,6 +914,12 @@ body.obsilities-file-icons
 	container-type: inline-size;
 }
 
+.obsilities-calendar.is-dragging-active,
+.obsilities-calendar.is-dragging-active * {
+	cursor: none !important;
+	user-select: none;
+}
+
 .obsilities-calendar-chip {
 	display: flex;
 	align-items: baseline;
@@ -950,6 +956,12 @@ body.obsilities-file-icons
 
 .obsilities-calendar-chip.is-dragging {
 	opacity: 0.4;
+}
+
+.obsilities-calendar-chip.is-preview {
+	pointer-events: none;
+	border: 1px dashed var(--obsilities-cal-accent);
+	opacity: 0.7;
 }
 
 .obsilities-calendar-chip-time {
@@ -1301,6 +1313,18 @@ body.obsilities-file-icons
 	opacity: 0.4;
 }
 
+.obsilities-calendar-event.is-preview {
+	pointer-events: none;
+	border-style: dashed;
+	opacity: 0.75;
+	background: color-mix(
+		in srgb,
+		var(--obsilities-cal-accent) 14%,
+		var(--background-primary)
+	);
+	z-index: 3;
+}
+
 .obsilities-calendar-event.is-continued-before {
 	border-top-left-radius: 0;
 	border-top-right-radius: 0;
@@ -1448,7 +1472,7 @@ body.obsilities-file-icons
 
 .obsilities-calendar-year-month-title {
 	position: absolute;
-	top: 0;
+	top: -0.5px;
 	left: calc(100% / 14 - 0.5em - 2px);
 	height: 20%;
 	display: flex;

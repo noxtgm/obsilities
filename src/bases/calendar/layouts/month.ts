@@ -1,6 +1,7 @@
 import { setIcon } from "obsidian";
 import {
 	formatTime,
+	fromLocalISODate,
 	monthFixedLeading,
 	sameDay,
 	toLocalISODate,
@@ -10,13 +11,20 @@ import type {
 	CalendarLayoutRenderer,
 	LayoutContext,
 } from "../types";
-import { attachChipInteractions, groupByDay, sortEvents } from "./shared";
+import {
+	attachChipInteractions,
+	buildPreviewChip,
+	groupByDay,
+	sortEvents,
+} from "./shared";
+import type { DragSpec } from "./shared";
 
 const MAX_CHIPS = 4;
 
 export class MonthLayout implements CalendarLayoutRenderer {
 	private root: HTMLElement;
-	private draggedId: string | null = null;
+	private preview: HTMLElement | null = null;
+	private dropTarget: HTMLElement | null = null;
 
 	constructor(container: HTMLElement) {
 		this.root = container.createDiv({ cls: "obsilities-calendar-month" });
@@ -89,8 +97,6 @@ export class MonthLayout implements CalendarLayoutRenderer {
 				ctx.callbacks.viewDay(day);
 			});
 		}
-
-		this.registerDropZone(cell, day, ctx);
 	}
 
 	private buildChip(
@@ -115,63 +121,77 @@ export class MonthLayout implements CalendarLayoutRenderer {
 			text: event.title,
 		});
 
-		if (isStart) {
-			attachChipInteractions(
-				chip,
-				event,
-				ctx,
-				() => {
-					this.draggedId = event.id;
-				},
-				() => {
-					this.draggedId = null;
-				},
-			);
-		} else {
-			attachChipInteractions(
-				chip,
-				event,
-				ctx,
-				() => {},
-				() => {},
-				false,
-			);
-		}
+		attachChipInteractions(
+			chip,
+			event,
+			ctx,
+			isStart ? this.makeDragSpec(event, ctx) : null,
+		);
 	}
 
-	private registerDropZone(
-		cell: HTMLElement,
-		day: Date,
-		ctx: LayoutContext,
-	): void {
-		cell.addEventListener("dragover", (e) => {
-			if (!this.draggedId) return;
-			e.preventDefault();
-			if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
-			cell.addClass("is-drop-target");
-		});
-		cell.addEventListener("dragleave", () => {
-			cell.removeClass("is-drop-target");
-		});
-		cell.addEventListener("drop", (e) => {
-			if (!this.draggedId) return;
-			e.preventDefault();
-			cell.removeClass("is-drop-target");
-			const event = ctx.events.find((ev) => ev.id === this.draggedId);
-			this.draggedId = null;
-			if (!event) return;
-
-			const start = new Date(day);
-			if (!event.allDay) {
-				start.setHours(
-					event.start.getHours(),
-					event.start.getMinutes(),
-					0,
-					0,
+	private makeDragSpec(event: CalendarEvent, ctx: LayoutContext): DragSpec {
+		return {
+			onMove: (x, y) => {
+				const cell = this.cellAt(x, y);
+				this.setDropTarget(cell);
+				const day = cell && fromLocalISODate(cell.dataset.date ?? "");
+				if (!day || sameDay(day, event.start)) {
+					this.clearPreview();
+					return;
+				}
+				const body = cell.querySelector<HTMLElement>(
+					".obsilities-calendar-day-events",
 				);
-			}
-			if (sameDay(start, event.start)) return;
-			ctx.callbacks.reschedule(event, start, event.allDay);
-		});
+				if (body) this.showPreview(body, event);
+			},
+			onDrop: (x, y) => {
+				const cell = this.cellAt(x, y);
+				const day = cell && fromLocalISODate(cell.dataset.date ?? "");
+				if (!day) return;
+				const start = new Date(day);
+				if (!event.allDay) {
+					start.setHours(
+						event.start.getHours(),
+						event.start.getMinutes(),
+						0,
+						0,
+					);
+				}
+				if (sameDay(start, event.start)) return;
+				ctx.callbacks.reschedule(event, start, event.allDay);
+			},
+			onEnd: () => {
+				this.clearPreview();
+				this.setDropTarget(null);
+			},
+		};
+	}
+
+	private cellAt(x: number, y: number): HTMLElement | null {
+		const el = this.root.doc.elementFromPoint(x, y);
+		return el
+			? el.closest<HTMLElement>(".obsilities-calendar-day")
+			: null;
+	}
+
+	private setDropTarget(cell: HTMLElement | null): void {
+		if (this.dropTarget === cell) return;
+		this.dropTarget?.removeClass("is-drop-target");
+		this.dropTarget = cell;
+		cell?.addClass("is-drop-target");
+	}
+
+	private showPreview(body: HTMLElement, event: CalendarEvent): void {
+		let preview = this.preview;
+		if (!preview || !preview.isConnected) {
+			preview = buildPreviewChip(event, event.allDay);
+			this.preview = preview;
+		}
+		if (preview.parentElement !== body) body.prepend(preview);
+	}
+
+	private clearPreview(): void {
+		this.preview?.remove();
+		this.preview = null;
 	}
 }

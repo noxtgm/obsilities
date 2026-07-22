@@ -3,6 +3,7 @@ import {
 	addMinutes,
 	formatHourLabel,
 	formatTime,
+	fromLocalISODate,
 	minutesSinceMidnight,
 	sameDay,
 	startOfDay,
@@ -14,7 +15,19 @@ import type {
 	CalendarLayoutRenderer,
 	LayoutContext,
 } from "../types";
-import { attachChipInteractions, eventCoversDay, sortEvents } from "./shared";
+import {
+	attachChipInteractions,
+	buildPreviewChip,
+	eventCoversDay,
+	sortEvents,
+} from "./shared";
+import type { DragSpec } from "./shared";
+
+type TimeGridZone = {
+	kind: "timed" | "allday";
+	col: HTMLElement;
+	day: Date;
+};
 
 const HOURS = 24;
 const HOUR_HEIGHT = 44; // px per hour, keep in sync with styles.css
@@ -43,6 +56,10 @@ function endTimeOf(event: CalendarEvent): number {
 	return event.end
 		? event.end.getTime()
 		: event.start.getTime() + DEFAULT_EVENT_MINUTES * 60000;
+}
+
+function durationMinutes(event: CalendarEvent): number {
+	return (endTimeOf(event) - event.start.getTime()) / 60000;
 }
 
 function segmentsForDay(events: CalendarEvent[], day: Date): DaySegment[] {
@@ -118,7 +135,9 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 	private headerEl: HTMLElement;
 	private alldayEl: HTMLElement;
 	private bodyEl: HTMLElement;
-	private draggedId: string | null = null;
+	private preview: HTMLElement | null = null;
+	private previewKind: "timed" | "allday" | null = null;
+	private dropTarget: HTMLElement | null = null;
 	private initialized = false;
 
 	constructor(
@@ -233,7 +252,6 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 					sameDay(event.start, day),
 				);
 			}
-			this.registerAllDayDropZone(col, day, ctx);
 		}
 	}
 
@@ -284,8 +302,6 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 			});
 			line.style.top = `${(minutesSinceMidnight(now) / 60) * HOUR_HEIGHT}px`;
 		}
-
-		this.registerTimedDropZone(col, day, ctx);
 	}
 
 	private buildTimedBlock(
@@ -324,28 +340,12 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 			text: event.title,
 		});
 
-		if (segment.continuesBefore) {
-			attachChipInteractions(
-				block,
-				event,
-				ctx,
-				() => {},
-				() => {},
-				false,
-			);
-		} else {
-			attachChipInteractions(
-				block,
-				event,
-				ctx,
-				() => {
-					this.draggedId = event.id;
-				},
-				() => {
-					this.draggedId = null;
-				},
-			);
-		}
+		attachChipInteractions(
+			block,
+			event,
+			ctx,
+			segment.continuesBefore ? null : this.makeDragSpec(event, ctx),
+		);
 
 		if (!segment.continuesAfter) {
 			const handle = block.createDiv({
@@ -369,73 +369,140 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 			cls: "obsilities-calendar-chip-title",
 			text: event.title,
 		});
-		if (isStart) {
-			attachChipInteractions(
-				chip,
-				event,
-				ctx,
-				() => {
-					this.draggedId = event.id;
-				},
-				() => {
-					this.draggedId = null;
-				},
-			);
-		} else {
-			attachChipInteractions(
-				chip,
-				event,
-				ctx,
-				() => {},
-				() => {},
-				false,
-			);
-		}
-	}
-
-	private registerAllDayDropZone(
-		col: HTMLElement,
-		day: Date,
-		ctx: LayoutContext,
-	): void {
-		col.addEventListener("dragover", (e) => {
-			if (!this.draggedId) return;
-			e.preventDefault();
-			if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
-			col.addClass("is-drop-target");
-		});
-		col.addEventListener("dragleave", () =>
-			col.removeClass("is-drop-target"),
+		attachChipInteractions(
+			chip,
+			event,
+			ctx,
+			isStart ? this.makeDragSpec(event, ctx) : null,
 		);
-		col.addEventListener("drop", (e) => {
-			if (!this.draggedId) return;
-			e.preventDefault();
-			col.removeClass("is-drop-target");
-			const event = this.takeDragged(ctx);
-			if (!event) return;
-			ctx.callbacks.reschedule(event, startOfDay(day), true);
-		});
 	}
 
-	private registerTimedDropZone(
+	private makeDragSpec(event: CalendarEvent, ctx: LayoutContext): DragSpec {
+		return {
+			onMove: (x, y) => {
+				const zone = this.zoneAt(x, y);
+				if (!zone) {
+					this.setDropTarget(null);
+					this.clearPreview();
+					return;
+				}
+				if (zone.kind === "timed") {
+					this.setDropTarget(null);
+					const minutes = this.pointerMinutes(zone.col, y);
+					this.showPreview(zone.col, zone.day, minutes, event);
+				} else {
+					this.setDropTarget(zone.col);
+					if (event.allDay && sameDay(zone.day, event.start)) {
+						this.clearPreview();
+					} else {
+						this.showAllDayPreview(zone.col, event);
+					}
+				}
+			},
+			onDrop: (x, y) => {
+				const zone = this.zoneAt(x, y);
+				if (!zone) return;
+				if (zone.kind === "timed") {
+					const minutes = this.pointerMinutes(zone.col, y);
+					const start = addMinutes(startOfDay(zone.day), minutes);
+					ctx.callbacks.reschedule(event, start, false);
+				} else {
+					ctx.callbacks.reschedule(event, startOfDay(zone.day), true);
+				}
+			},
+			onEnd: () => {
+				this.clearPreview();
+				this.setDropTarget(null);
+			},
+		};
+	}
+
+	private zoneAt(x: number, y: number): TimeGridZone | null {
+		const el = this.root.doc.elementFromPoint(x, y);
+		if (!el) return null;
+		const timed = el.closest<HTMLElement>(
+			".obsilities-calendar-timegrid-col",
+		);
+		if (timed) {
+			const day = fromLocalISODate(timed.dataset.date ?? "");
+			if (day) return { kind: "timed", col: timed, day };
+		}
+		const allday = el.closest<HTMLElement>(
+			".obsilities-calendar-allday-col",
+		);
+		if (allday) {
+			const day = fromLocalISODate(allday.dataset.date ?? "");
+			if (day) return { kind: "allday", col: allday, day };
+		}
+		return null;
+	}
+
+	private setDropTarget(col: HTMLElement | null): void {
+		if (this.dropTarget === col) return;
+		this.dropTarget?.removeClass("is-drop-target");
+		this.dropTarget = col;
+		col?.addClass("is-drop-target");
+	}
+
+	private showPreview(
 		col: HTMLElement,
 		day: Date,
-		ctx: LayoutContext,
+		minutes: number,
+		event: CalendarEvent,
 	): void {
-		col.addEventListener("dragover", (e) => {
-			if (!this.draggedId) return;
-			e.preventDefault();
-			if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
-		});
-		col.addEventListener("drop", (e) => {
-			if (!this.draggedId) return;
-			e.preventDefault();
-			const event = this.takeDragged(ctx);
-			if (!event) return;
-			const minutes = this.pointerMinutes(col, e.clientY);
-			const start = addMinutes(startOfDay(day), minutes);
-			ctx.callbacks.reschedule(event, start, false);
-		});
+		if (this.previewKind !== "timed") this.clearPreview();
+		let preview = this.preview;
+		if (!preview || !preview.isConnected) {
+			preview = createDiv({
+				cls: "obsilities-calendar-event is-preview",
+			});
+			preview.createSpan({ cls: "obsilities-calendar-event-time" });
+			preview.createSpan({ cls: "obsilities-calendar-event-title" });
+			this.preview = preview;
+			this.previewKind = "timed";
+		}
+		if (preview.parentElement !== col) col.appendChild(preview);
+
+		const top = (minutes / 60) * HOUR_HEIGHT;
+		const height = Math.min(
+			COL_HEIGHT - top,
+			Math.max(
+				MIN_BLOCK_HEIGHT,
+				(durationMinutes(event) / 60) * HOUR_HEIGHT,
+			),
+		);
+		preview.style.top = `${top}px`;
+		preview.style.height = `${height}px`;
+		preview.style.left = "0";
+		preview.style.width = "100%";
+
+		const timeEl = preview.querySelector<HTMLElement>(
+			".obsilities-calendar-event-time",
+		);
+		if (timeEl) {
+			timeEl.setText(formatTime(addMinutes(startOfDay(day), minutes)));
+		}
+		const titleEl = preview.querySelector<HTMLElement>(
+			".obsilities-calendar-event-title",
+		);
+		if (titleEl) titleEl.setText(event.title);
+	}
+
+	private showAllDayPreview(col: HTMLElement, event: CalendarEvent): void {
+		if (this.previewKind !== "allday") this.clearPreview();
+		let preview = this.preview;
+		if (!preview || !preview.isConnected) {
+			preview = buildPreviewChip(event, true);
+			this.preview = preview;
+			this.previewKind = "allday";
+		}
+		if (preview.parentElement !== col) col.appendChild(preview);
+	}
+
+	private clearPreview(): void {
+		this.preview?.remove();
+		this.preview = null;
+		this.previewKind = null;
 	}
 
 	private pointerMinutes(col: HTMLElement, clientY: number): number {
@@ -444,12 +511,6 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 		const rawMinutes = (offset / HOUR_HEIGHT) * 60;
 		const snapped = Math.round(rawMinutes / SNAP_MINUTES) * SNAP_MINUTES;
 		return Math.min(Math.max(snapped, 0), HOURS * 60 - SNAP_MINUTES);
-	}
-
-	private takeDragged(ctx: LayoutContext): CalendarEvent | null {
-		const event = ctx.events.find((ev) => ev.id === this.draggedId) ?? null;
-		this.draggedId = null;
-		return event;
 	}
 
 	private registerResize(
@@ -464,7 +525,6 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 		handle.addEventListener("pointerdown", (e) => {
 			e.preventDefault();
 			e.stopPropagation();
-			block.setAttribute("draggable", "false");
 			ctx.callbacks.setDragging(true);
 			handle.setPointerCapture(e.pointerId);
 
@@ -482,7 +542,6 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 				handle.removeEventListener("pointermove", onMove);
 				handle.removeEventListener("pointerup", onUp);
 				handle.removeEventListener("pointercancel", onCancel);
-				block.setAttribute("draggable", "true");
 				ctx.callbacks.setDragging(false);
 			};
 

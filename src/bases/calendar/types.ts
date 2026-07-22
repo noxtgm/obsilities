@@ -48,7 +48,6 @@ export interface CalendarCallbacks {
 	viewDay: (day: Date) => void;
 	viewMonth: (day: Date) => void;
 	setDragging: (active: boolean) => void;
-	isDragging: () => boolean;
 }
 
 export interface LayoutContext {
