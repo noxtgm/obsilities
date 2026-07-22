@@ -32,7 +32,6 @@ type TimeGridZone = {
 const HOURS = 24;
 const HOUR_HEIGHT = 44; // px per hour, keep in sync with styles.css
 const DAY_MINUTES = HOURS * 60;
-const COL_HEIGHT = HOURS * HOUR_HEIGHT;
 const SNAP_MINUTES = 15;
 const DEFAULT_EVENT_MINUTES = 60;
 const MIN_BLOCK_HEIGHT = 20;
@@ -135,8 +134,7 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 	private headerEl: HTMLElement;
 	private alldayEl: HTMLElement;
 	private bodyEl: HTMLElement;
-	private preview: HTMLElement | null = null;
-	private previewKind: "timed" | "allday" | null = null;
+	private previewEls: HTMLElement[] = [];
 	private dropTarget: HTMLElement | null = null;
 	private initialized = false;
 
@@ -292,7 +290,7 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 		}
 
 		for (const placed of packSegments(segmentsForDay(ctx.events, day))) {
-			this.buildTimedBlock(col, placed, day, ctx);
+			this.buildTimedBlock(col, placed, ctx);
 		}
 
 		if (sameDay(day, ctx.today)) {
@@ -307,7 +305,6 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 	private buildTimedBlock(
 		col: HTMLElement,
 		placed: PlacedSegment,
-		day: Date,
 		ctx: LayoutContext,
 	): void {
 		const { segment, lane, lanes } = placed;
@@ -347,11 +344,17 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 			segment.continuesBefore ? null : this.makeDragSpec(event, ctx),
 		);
 
-		if (!segment.continuesAfter) {
-			const handle = block.createDiv({
-				cls: "obsilities-calendar-event-resize",
+		if (!segment.continuesBefore) {
+			const topHandle = block.createDiv({
+				cls: "obsilities-calendar-event-resize is-top",
 			});
-			this.registerResize(handle, block, event, day, ctx);
+			this.registerEdgeDrag(topHandle, event, "start", ctx);
+		}
+		if (!segment.continuesAfter) {
+			const bottomHandle = block.createDiv({
+				cls: "obsilities-calendar-event-resize is-bottom",
+			});
+			this.registerEdgeDrag(bottomHandle, event, "end", ctx);
 		}
 	}
 
@@ -450,59 +453,105 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 		minutes: number,
 		event: CalendarEvent,
 	): void {
-		if (this.previewKind !== "timed") this.clearPreview();
-		let preview = this.preview;
-		if (!preview || !preview.isConnected) {
-			preview = createDiv({
-				cls: "obsilities-calendar-event is-preview",
+		this.clearPreview();
+		const botMin = Math.min(DAY_MINUTES, minutes + durationMinutes(event));
+		this.appendPreviewSegment(col, {
+			topMin: minutes,
+			botMin,
+			timeLabel: formatTime(addMinutes(startOfDay(day), minutes)),
+			title: event.title,
+			continuesBefore: false,
+			continuesAfter: false,
+		});
+	}
+
+	private showResizePreview(
+		event: CalendarEvent,
+		start: Date,
+		end: Date,
+	): void {
+		this.clearPreview();
+		const endMs = end.getTime();
+		let day = startOfDay(start);
+		for (let guard = 0; day.getTime() < endMs && guard < 366; guard++) {
+			const dayStart = day.getTime();
+			const dayEnd = dayStart + DAY_MINUTES * 60000;
+			const col = this.timedColForDay(toLocalISODate(day));
+			day = addDays(day, 1);
+			if (!col) continue; // Day not in view
+
+			const topMin =
+				(Math.max(start.getTime(), dayStart) - dayStart) / 60000;
+			const botMin = (Math.min(endMs, dayEnd) - dayStart) / 60000;
+			if (botMin <= topMin) continue;
+			const continuesBefore = start.getTime() < dayStart;
+			this.appendPreviewSegment(col, {
+				topMin,
+				botMin,
+				timeLabel: continuesBefore ? null : formatTime(start),
+				title: event.title,
+				continuesBefore,
+				continuesAfter: endMs > dayEnd,
 			});
-			preview.createSpan({ cls: "obsilities-calendar-event-time" });
-			preview.createSpan({ cls: "obsilities-calendar-event-title" });
-			this.preview = preview;
-			this.previewKind = "timed";
 		}
-		if (preview.parentElement !== col) col.appendChild(preview);
+	}
 
-		const top = (minutes / 60) * HOUR_HEIGHT;
-		const height = Math.min(
-			COL_HEIGHT - top,
-			Math.max(
-				MIN_BLOCK_HEIGHT,
-				(durationMinutes(event) / 60) * HOUR_HEIGHT,
-			),
-		);
-		preview.style.top = `${top}px`;
-		preview.style.height = `${height}px`;
-		preview.style.left = "0";
-		preview.style.width = "100%";
+	private appendPreviewSegment(
+		col: HTMLElement,
+		seg: {
+			topMin: number;
+			botMin: number;
+			timeLabel: string | null;
+			title: string;
+			continuesBefore: boolean;
+			continuesAfter: boolean;
+		},
+	): void {
+		const el = createDiv({ cls: "obsilities-calendar-event is-preview" });
+		if (seg.continuesBefore) el.addClass("is-continued-before");
+		if (seg.continuesAfter) el.addClass("is-continued-after");
 
-		const timeEl = preview.querySelector<HTMLElement>(
-			".obsilities-calendar-event-time",
+		const top = (seg.topMin / 60) * HOUR_HEIGHT;
+		const height = Math.max(
+			MIN_BLOCK_HEIGHT,
+			((seg.botMin - seg.topMin) / 60) * HOUR_HEIGHT,
 		);
-		if (timeEl) {
-			timeEl.setText(formatTime(addMinutes(startOfDay(day), minutes)));
+		el.style.top = `${top}px`;
+		el.style.height = `${height}px`;
+		el.style.left = "0";
+		el.style.width = "100%";
+
+		if (seg.timeLabel !== null) {
+			el.createSpan({
+				cls: "obsilities-calendar-event-time",
+				text: seg.timeLabel,
+			});
 		}
-		const titleEl = preview.querySelector<HTMLElement>(
-			".obsilities-calendar-event-title",
+		el.createSpan({
+			cls: "obsilities-calendar-event-title",
+			text: seg.title,
+		});
+
+		col.appendChild(el);
+		this.previewEls.push(el);
+	}
+
+	private timedColForDay(iso: string): HTMLElement | null {
+		return this.bodyEl.querySelector<HTMLElement>(
+			`.obsilities-calendar-timegrid-col[data-date="${iso}"]`,
 		);
-		if (titleEl) titleEl.setText(event.title);
 	}
 
 	private showAllDayPreview(col: HTMLElement, event: CalendarEvent): void {
-		if (this.previewKind !== "allday") this.clearPreview();
-		let preview = this.preview;
-		if (!preview || !preview.isConnected) {
-			preview = buildPreviewChip(event, true);
-			this.preview = preview;
-			this.previewKind = "allday";
-		}
-		if (preview.parentElement !== col) col.appendChild(preview);
+		this.clearPreview();
+		const chip = buildPreviewChip(event, true);
+		col.appendChild(chip);
+		this.previewEls.push(chip);
 	}
 
 	private clearPreview(): void {
-		this.preview?.remove();
-		this.preview = null;
-		this.previewKind = null;
+		for (const el of this.previewEls) el.remove();
+		this.previewEls = [];
 	}
 
 	private pointerMinutes(col: HTMLElement, clientY: number): number {
@@ -513,71 +562,99 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 		return Math.min(Math.max(snapped, 0), HOURS * 60 - SNAP_MINUTES);
 	}
 
-	private registerResize(
+	private registerEdgeDrag(
 		handle: HTMLElement,
-		block: HTMLElement,
 		event: CalendarEvent,
-		day: Date,
+		edge: "start" | "end",
 		ctx: LayoutContext,
 	): void {
 		handle.addEventListener("click", (e) => e.stopPropagation());
 
 		handle.addEventListener("pointerdown", (e) => {
+			if (e.button !== 0) return;
 			e.preventDefault();
 			e.stopPropagation();
+			const doc = handle.doc;
+			const calRoot = handle.closest<HTMLElement>(".obsilities-calendar");
 			ctx.callbacks.setDragging(true);
-			handle.setPointerCapture(e.pointerId);
-
-			const startY = e.clientY;
-			const startTop = block.offsetTop;
-			const startHeight = block.offsetHeight;
-
-			const clampHeight = (raw: number): number =>
-				Math.min(
-					COL_HEIGHT - startTop,
-					Math.max(MIN_BLOCK_HEIGHT, raw),
-				);
+			calRoot?.addClass("is-dragging-active");
 
 			const cleanup = (): void => {
-				handle.removeEventListener("pointermove", onMove);
-				handle.removeEventListener("pointerup", onUp);
-				handle.removeEventListener("pointercancel", onCancel);
+				doc.removeEventListener("pointermove", onMove);
+				doc.removeEventListener("pointerup", onUp);
+				doc.removeEventListener("pointercancel", onCancel);
+			};
+			const finish = (): void => {
+				this.clearPreview();
+				calRoot?.removeClass("is-dragging-active");
 				ctx.callbacks.setDragging(false);
 			};
 
 			const onMove = (move: PointerEvent): void => {
-				block.style.height = `${clampHeight(
-					startHeight + (move.clientY - startY),
-				)}px`;
+				const res = this.edgeResizeAt(
+					move.clientX,
+					move.clientY,
+					event,
+					edge,
+				);
+				if (!res) {
+					this.clearPreview();
+					return;
+				}
+				this.showResizePreview(event, res.start, res.end);
 			};
-
 			const onUp = (up: PointerEvent): void => {
 				cleanup();
-				const finalHeight = clampHeight(
-					startHeight + (up.clientY - startY),
-				);
-				const rawEndMin = ((startTop + finalHeight) / HOUR_HEIGHT) * 60;
-				const endMin = Math.min(
-					DAY_MINUTES,
-					Math.max(
-						SNAP_MINUTES,
-						Math.round(rawEndMin / SNAP_MINUTES) * SNAP_MINUTES,
-					),
-				);
-				ctx.callbacks.resize(
+				const res = this.edgeResizeAt(
+					up.clientX,
+					up.clientY,
 					event,
-					addMinutes(startOfDay(day), endMin),
+					edge,
 				);
+				finish();
+				if (res) ctx.callbacks.resize(event, res.start, res.end);
 			};
-
 			const onCancel = (): void => {
 				cleanup();
-				block.style.height = `${startHeight}px`;
+				finish();
 			};
 
-			handle.addEventListener("pointermove", onMove);
-			handle.addEventListener("pointerup", onUp);
-			handle.addEventListener("pointercancel", onCancel);
+			doc.addEventListener("pointermove", onMove);
+			doc.addEventListener("pointerup", onUp);
+			doc.addEventListener("pointercancel", onCancel);
 		});
+	}
+
+	private edgeMinutes(col: HTMLElement, clientY: number): number {
+		const rect = col.getBoundingClientRect();
+		const offset = clientY - rect.top;
+		const rawMinutes = (offset / HOUR_HEIGHT) * 60;
+		const snapped = Math.round(rawMinutes / SNAP_MINUTES) * SNAP_MINUTES;
+		return Math.min(Math.max(snapped, 0), DAY_MINUTES);
+	}
+
+	private edgeResizeAt(
+		clientX: number,
+		clientY: number,
+		event: CalendarEvent,
+		edge: "start" | "end",
+	): { start: Date; end: Date } | null {
+		const zone = this.zoneAt(clientX, clientY);
+		if (!zone || zone.kind !== "timed") return null;
+		const minutes = this.edgeMinutes(zone.col, clientY);
+		const candidate = addMinutes(startOfDay(zone.day), minutes).getTime();
+		const minMs = SNAP_MINUTES * 60000;
+		if (edge === "end") {
+			const startMs = event.start.getTime();
+			return {
+				start: new Date(startMs),
+				end: new Date(Math.max(startMs + minMs, candidate)),
+			};
+		}
+		const endMs = endTimeOf(event);
+		return {
+			start: new Date(Math.min(endMs - minMs, candidate)),
+			end: new Date(endMs),
+		};
 	}
 }

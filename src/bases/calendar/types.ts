@@ -43,7 +43,7 @@ export interface CalendarCallbacks {
 	open: (path: string, newTab: boolean) => void;
 	openBackground: (path: string) => void;
 	reschedule: (event: CalendarEvent, start: Date, allDay: boolean) => void;
-	resize: (event: CalendarEvent, end: Date) => void;
+	resize: (event: CalendarEvent, start: Date, end: Date) => void;
 	create: (day: Date) => void;
 	viewDay: (day: Date) => void;
 	viewMonth: (day: Date) => void;

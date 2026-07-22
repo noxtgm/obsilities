@@ -38,7 +38,6 @@ import type {
 import {
 	dateFrontmatterSetter,
 	isWritableProperty,
-	writeDate,
 	writeDates,
 } from "./writes";
 import type { DateWrite } from "./writes";
@@ -390,8 +389,8 @@ export class CalendarView extends BasesView {
 			reschedule: (event, start, allDay) => {
 				void this.reschedule(event, start, allDay);
 			},
-			resize: (event, end) => {
-				void this.resize(event, end);
+			resize: (event, start, end) => {
+				void this.resize(event, start, end);
 			},
 			create: (day) => {
 				void this.create(day);
@@ -457,15 +456,28 @@ export class CalendarView extends BasesView {
 		}
 	}
 
-	private async resize(event: CalendarEvent, end: Date): Promise<void> {
-		if (!this.endProp || !isWritableProperty(this.endProp)) {
+	private async resize(
+		event: CalendarEvent,
+		start: Date,
+		end: Date,
+	): Promise<void> {
+		const file = this.fileForPath(event.path);
+		if (!file) return;
+
+		const writes: DateWrite[] = [];
+		if (this.dateProp && isWritableProperty(this.dateProp)) {
+			writes.push({ propId: this.dateProp, date: start, allDay: false });
+		}
+		if (this.endProp && isWritableProperty(this.endProp)) {
+			writes.push({ propId: this.endProp, date: end, allDay: false });
+		}
+		if (writes.length === 0) {
 			this.render();
 			return;
 		}
-		const file = this.fileForPath(event.path);
-		if (!file) return;
+
 		try {
-			await writeDate(this.app, file, this.endProp, end, false);
+			await writeDates(this.app, file, writes);
 		} catch (error) {
 			console.error("obsilities-calendar: resize failed", error);
 			this.render();

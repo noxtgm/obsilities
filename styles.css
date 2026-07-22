@@ -1357,9 +1357,16 @@ body.obsilities-file-icons
 	position: absolute;
 	left: 0;
 	right: 0;
-	bottom: 0;
 	height: 6px;
 	cursor: ns-resize;
+}
+
+.obsilities-calendar-event-resize.is-top {
+	top: 0;
+}
+
+.obsilities-calendar-event-resize.is-bottom {
+	bottom: 0;
 }
 
 .obsilities-calendar-now-line {
