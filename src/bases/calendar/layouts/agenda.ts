@@ -1,5 +1,11 @@
 import { Keymap } from "obsidian";
-import { formatTime, sameDay, startOfDay, toLocalISODate } from "../dates";
+import {
+	endOfMonth,
+	formatTime,
+	sameDay,
+	startOfDay,
+	toLocalISODate,
+} from "../dates";
 import type {
 	CalendarEvent,
 	CalendarLayoutRenderer,
@@ -21,14 +27,19 @@ export class AgendaLayout implements CalendarLayoutRenderer {
 	render(ctx: LayoutContext): void {
 		this.root.empty();
 
-		const from = startOfDay(ctx.anchor).getTime();
+		const from = Math.max(
+			startOfDay(ctx.anchor).getTime(),
+			startOfDay(ctx.today).getTime(),
+		);
+		const monthEnd = endOfMonth(ctx.anchor).getTime();
 		const groups = new Map<
 			string,
 			{ day: Date; events: CalendarEvent[] }
 		>();
 		for (const event of ctx.events) {
 			for (const day of coveredDays(event)) {
-				if (day.getTime() < from) continue;
+				const time = day.getTime();
+				if (time < from || time > monthEnd) continue;
 				const iso = toLocalISODate(day);
 				const group = groups.get(iso);
 				if (group) group.events.push(event);
@@ -39,7 +50,7 @@ export class AgendaLayout implements CalendarLayoutRenderer {
 		if (groups.size === 0) {
 			this.root.createDiv({
 				cls: "obsilities-calendar-empty",
-				text: "No upcoming events.",
+				text: "No upcoming events this month.",
 			});
 			return;
 		}
@@ -64,7 +75,7 @@ export class AgendaLayout implements CalendarLayoutRenderer {
 			cls: "obsilities-calendar-agenda-date",
 			text: day.toLocaleDateString(undefined, {
 				weekday: "long",
-				month: "short",
+				month: "long",
 				day: "numeric",
 			}),
 		});

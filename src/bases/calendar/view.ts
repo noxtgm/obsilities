@@ -5,6 +5,7 @@ import {
 	addMonths,
 	addYears,
 	endOfDay,
+	endOfMonth,
 	endOfYear,
 	formatDateRange,
 	formatDayTitle,
@@ -50,6 +51,7 @@ export class CalendarView extends BasesView {
 	private prevScrollPosition: string;
 	private bodyEl: HTMLElement;
 	private toolbarTitleEl: HTMLElement | null = null;
+	private prevBtn: HTMLElement | null = null;
 	private layoutButtons: Map<CalendarLayout, HTMLElement> = new Map();
 
 	private layout: CalendarLayout = "month";
@@ -109,6 +111,7 @@ export class CalendarView extends BasesView {
 		});
 		setIcon(prev, "chevron-left");
 		prev.addEventListener("click", () => this.step(-1));
+		this.prevBtn = prev;
 
 		const next = nav.createDiv({
 			cls: "obsilities-calendar-nav-btn clickable-icon",
@@ -136,9 +139,24 @@ export class CalendarView extends BasesView {
 
 	private updateToolbar(): void {
 		this.renderTitle();
+		const prevDisabled = this.isPrevDisabled();
+		this.prevBtn?.toggleClass("is-disabled", prevDisabled);
+		this.prevBtn?.setAttribute(
+			"aria-disabled",
+			prevDisabled ? "true" : "false",
+		);
 		for (const [layout, btn] of this.layoutButtons) {
 			btn.toggleClass("is-active", layout === this.layout);
 		}
+	}
+
+	// Agenda is forward-only: never page earlier than the current month.
+	private isPrevDisabled(): boolean {
+		if (this.layout !== "agenda") return false;
+		return (
+			startOfMonth(this.anchor).getTime() <=
+			startOfMonth(new Date()).getTime()
+		);
 	}
 
 	private renderTitle(): void {
@@ -191,11 +209,13 @@ export class CalendarView extends BasesView {
 	}
 
 	private step(direction: number): void {
+		if (direction < 0 && this.isPrevDisabled()) return;
 		switch (this.layout) {
 			case "year":
 				this.anchor = addYears(this.anchor, direction);
 				break;
 			case "month":
+			case "agenda":
 				this.anchor = addMonths(this.anchor, direction);
 				break;
 			case "3days":
@@ -347,10 +367,11 @@ export class CalendarView extends BasesView {
 					start: startOfDay(this.anchor),
 					end: endOfDay(this.anchor),
 				};
-			case "agenda": {
-				const start = startOfDay(this.anchor);
-				return { start, end: endOfDay(addDays(start, 365)) };
-			}
+			case "agenda":
+				return {
+					start: startOfDay(this.anchor),
+					end: endOfMonth(this.anchor),
+				};
 			default: {
 				const days = monthFixedLeading(this.anchor, 2);
 				const first = days[0] ?? startOfMonth(this.anchor);

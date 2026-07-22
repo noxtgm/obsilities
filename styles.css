@@ -855,6 +855,12 @@ body.obsilities-file-icons
 	cursor: pointer;
 }
 
+.obsilities-calendar-nav-btn.is-disabled {
+	cursor: default;
+	opacity: 0.35;
+	pointer-events: none;
+}
+
 .obsilities-calendar-title {
 	font-weight: 600;
 	font-size: var(--font-ui-large);

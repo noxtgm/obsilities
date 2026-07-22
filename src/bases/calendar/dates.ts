@@ -31,6 +31,12 @@ export function startOfMonth(date: Date): Date {
 	return new Date(date.getFullYear(), date.getMonth(), 1);
 }
 
+export function endOfMonth(date: Date): Date {
+	const d = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+	d.setHours(23, 59, 59, 999);
+	return d;
+}
+
 export function addMonths(date: Date, months: number): Date {
 	return new Date(date.getFullYear(), date.getMonth() + months, 1);
 }
