@@ -74,7 +74,7 @@ export class MonthLayout implements CalendarLayoutRenderer {
 		});
 		const addBtn = dayHeader.createDiv({
 			cls: "obsilities-calendar-day-add",
-			attr: { "aria-label": "New note on this day" },
+			attr: { "aria-label": "New event on this day" },
 		});
 		setIcon(addBtn, "plus");
 		addBtn.addEventListener("click", (e) => {
