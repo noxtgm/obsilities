@@ -28,6 +28,7 @@ export const CONFIG = {
 	yearlyRepeat: "yearlyRepeat",
 	defaultLayout: "defaultLayout",
 	weekStart: "weekStart",
+	defaultDuration: "defaultDuration",
 } as const;
 
 export interface CalendarEvent {

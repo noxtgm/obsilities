@@ -56,6 +56,7 @@ export class CalendarView extends BasesView {
 	private layout: CalendarLayout = "month";
 	private anchor: Date = startOfDay(new Date());
 	private weekStart = 1; // Monday by default
+	private defaultDurationMinutes = 60;
 	private stateInitialized = false;
 
 	private renderer: CalendarLayoutRenderer | null = null;
@@ -267,6 +268,17 @@ export class CalendarView extends BasesView {
 		return Number.isFinite(n) && n >= 0 && n <= 6 ? n : 1;
 	}
 
+	private readDefaultDuration(): number {
+		const raw = this.config.get(CONFIG.defaultDuration);
+		const n =
+			typeof raw === "number"
+				? raw
+				: typeof raw === "string"
+					? Number.parseInt(raw, 10)
+					: NaN;
+		return Number.isFinite(n) && n > 0 ? n : 60;
+	}
+
 	private render(): void {
 		if (this.dragging) return;
 		this.initStateFromConfig();
@@ -281,6 +293,7 @@ export class CalendarView extends BasesView {
 		this.endProp = this.config.getAsPropertyId(CONFIG.endDateProperty);
 		this.titleProp = this.config.getAsPropertyId(CONFIG.titleProperty);
 		this.weekStart = this.readWeekStart();
+		this.defaultDurationMinutes = this.readDefaultDuration();
 
 		const events = buildEvents({
 			app: this.app,
@@ -439,13 +452,11 @@ export class CalendarView extends BasesView {
 		const writes: DateWrite[] = [
 			{ propId: this.dateProp, date: start, allDay },
 		];
-		if (this.endProp && isWritableProperty(this.endProp) && event.end) {
-			const delta = start.getTime() - event.start.getTime();
-			writes.push({
-				propId: this.endProp,
-				date: new Date(event.end.getTime() + delta),
-				allDay,
-			});
+		if (this.endProp && isWritableProperty(this.endProp)) {
+			const end = this.rescheduledEnd(event, start, allDay);
+			if (end) {
+				writes.push({ propId: this.endProp, date: end, allDay });
+			}
 		}
 
 		try {
@@ -454,6 +465,21 @@ export class CalendarView extends BasesView {
 			console.error("obsilities-calendar: reschedule failed", error);
 			this.render();
 		}
+	}
+
+	private rescheduledEnd(
+		event: CalendarEvent,
+		start: Date,
+		allDay: boolean,
+	): Date | null {
+		if (!allDay && (event.allDay || !event.end)) {
+			return new Date(start.getTime() + this.defaultDurationMinutes * 60000);
+		}
+		if (event.end) {
+			const delta = start.getTime() - event.start.getTime();
+			return new Date(event.end.getTime() + delta);
+		}
+		return null;
 	}
 
 	private async resize(
@@ -544,6 +570,20 @@ export class CalendarView extends BasesView {
 				key: CONFIG.weekStart,
 				default: "1",
 				options: { "1": "Monday", "0": "Sunday" },
+			},
+			{
+				displayName: "Default event duration",
+				type: "dropdown",
+				key: CONFIG.defaultDuration,
+				default: "60",
+				options: {
+					"15": "15 minutes",
+					"30": "30 minutes",
+					"45": "45 minutes",
+					"60": "1 hour",
+					"90": "1.5 hours",
+					"120": "2 hours",
+				},
 			},
 		];
 	}
