@@ -154,12 +154,12 @@ export function formatMonthTitle(date: Date): string {
 }
 
 export function formatDayTitle(date: Date): string {
-	return date.toLocaleDateString(undefined, {
+	const base = date.toLocaleDateString(undefined, {
 		weekday: "long",
 		month: "long",
 		day: "numeric",
-		year: "numeric",
 	});
+	return `${base}, ${date.getFullYear()}`;
 }
 
 export function isoWeekNumber(date: Date): number {
