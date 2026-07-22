@@ -1341,9 +1341,24 @@ body.obsilities-file-icons
 	border-bottom-right-radius: 0;
 }
 
+.obsilities-calendar-event.is-compact {
+	flex-direction: row;
+	align-items: baseline;
+	gap: 5px;
+}
+
 .obsilities-calendar-event-time {
 	color: var(--text-muted);
 	font-variant-numeric: tabular-nums;
+}
+
+.obsilities-calendar-event.is-compact .obsilities-calendar-event-time {
+	flex-shrink: 0;
+}
+
+.obsilities-calendar-event.is-compact .obsilities-calendar-event-title {
+	flex: 1 1 auto;
+	min-width: 0;
 }
 
 .obsilities-calendar-event-title {

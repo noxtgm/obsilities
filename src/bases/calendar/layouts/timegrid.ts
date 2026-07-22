@@ -35,6 +35,7 @@ const DAY_MINUTES = HOURS * 60;
 const SNAP_MINUTES = 15;
 const DEFAULT_EVENT_MINUTES = 60;
 const MIN_BLOCK_HEIGHT = 20;
+const COMPACT_BLOCK_HEIGHT = 36;
 const INITIAL_SCROLL_HOUR = 7;
 
 interface DaySegment {
@@ -315,6 +316,7 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 		});
 		if (segment.continuesBefore) block.addClass("is-continued-before");
 		if (segment.continuesAfter) block.addClass("is-continued-after");
+		if (height < COMPACT_BLOCK_HEIGHT) block.addClass("is-compact");
 		block.style.top = `${top}px`;
 		block.style.height = `${height}px`;
 		block.style.left = `${(lane / lanes) * 100}%`;
@@ -510,6 +512,7 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 			MIN_BLOCK_HEIGHT,
 			((seg.botMin - seg.topMin) / 60) * HOUR_HEIGHT,
 		);
+		if (height < COMPACT_BLOCK_HEIGHT) el.addClass("is-compact");
 		el.style.top = `${top}px`;
 		el.style.height = `${height}px`;
 		el.style.left = "0";
