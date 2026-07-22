@@ -388,7 +388,7 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 				if (zone.kind === "timed") {
 					this.setDropTarget(null);
 					const minutes = this.pointerMinutes(zone.col, y);
-					this.showPreview(zone.col, zone.day, minutes, event);
+					this.showPreview(zone.day, minutes, event);
 				} else {
 					this.setDropTarget(zone.col);
 					if (event.allDay && sameDay(zone.day, event.start)) {
@@ -444,21 +444,14 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 	}
 
 	private showPreview(
-		col: HTMLElement,
 		day: Date,
 		minutes: number,
 		event: CalendarEvent,
 	): void {
 		this.clearPreview();
-		const botMin = Math.min(DAY_MINUTES, minutes + durationMinutes(event));
-		this.appendPreviewSegment(col, {
-			topMin: minutes,
-			botMin,
-			timeLabel: formatTime(addMinutes(startOfDay(day), minutes)),
-			title: event.title,
-			continuesBefore: false,
-			continuesAfter: false,
-		});
+		const start = addMinutes(startOfDay(day), minutes);
+		const end = new Date(start.getTime() + durationMinutes(event) * 60000);
+		this.appendSpanSegments(start, end, event.title);
 	}
 
 	private showResizePreview(
@@ -467,6 +460,10 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 		end: Date,
 	): void {
 		this.clearPreview();
+		this.appendSpanSegments(start, end, event.title);
+	}
+
+	private appendSpanSegments(start: Date, end: Date, title: string): void {
 		const endMs = end.getTime();
 		let day = startOfDay(start);
 		for (let guard = 0; day.getTime() < endMs && guard < 366; guard++) {
@@ -485,7 +482,7 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 				topMin,
 				botMin,
 				timeLabel: continuesBefore ? null : formatTime(start),
-				title: event.title,
+				title,
 				continuesBefore,
 				continuesAfter: endMs > dayEnd,
 			});
