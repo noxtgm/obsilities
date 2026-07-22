@@ -169,9 +169,7 @@ export class MonthLayout implements CalendarLayoutRenderer {
 
 	private cellAt(x: number, y: number): HTMLElement | null {
 		const el = this.root.doc.elementFromPoint(x, y);
-		return el
-			? el.closest<HTMLElement>(".obsilities-calendar-day")
-			: null;
+		return el ? el.closest<HTMLElement>(".obsilities-calendar-day") : null;
 	}
 
 	private setDropTarget(cell: HTMLElement | null): void {

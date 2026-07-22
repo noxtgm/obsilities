@@ -103,12 +103,16 @@ export function buildEvents(opts: EventBuildOptions): CalendarEvent[] {
 		if (!start) continue;
 
 		let end: Date | null = null;
+		let rawEnd: Date | null = null;
 		let allDay = start.allDay;
 		if (opts.endProp) {
 			const parsedEnd = readEntryDate(opts.app, entry, opts.endProp);
-			if (parsedEnd && parsedEnd.date.getTime() > start.date.getTime()) {
-				end = parsedEnd.date;
-				if (!parsedEnd.allDay) allDay = false;
+			if (parsedEnd) {
+				rawEnd = parsedEnd.date;
+				if (parsedEnd.date.getTime() > start.date.getTime()) {
+					end = parsedEnd.date;
+					if (!parsedEnd.allDay) allDay = false;
+				}
 			}
 		}
 
@@ -132,6 +136,7 @@ export function buildEvents(opts: EventBuildOptions): CalendarEvent[] {
 				title,
 				start: start.date,
 				end,
+				rawEnd,
 				allDay,
 			});
 		}
@@ -165,13 +170,15 @@ function pushYearlyOccurrences(
 		const time = occurrence.getTime();
 		if (time < input.range.start.getTime()) continue;
 		if (time > input.range.end.getTime()) continue;
+		const occurrenceEnd =
+			input.duration != null ? new Date(time + input.duration) : null;
 		events.push({
 			id: `${input.path}:${year}`,
 			path: input.path,
 			title: input.title,
 			start: occurrence,
-			end:
-				input.duration != null ? new Date(time + input.duration) : null,
+			end: occurrenceEnd,
+			rawEnd: occurrenceEnd,
 			allDay: input.allDay,
 		});
 	}

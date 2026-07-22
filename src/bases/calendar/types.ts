@@ -37,6 +37,7 @@ export interface CalendarEvent {
 	title: string;
 	start: Date;
 	end: Date | null;
+	rawEnd: Date | null;
 	allDay: boolean;
 }
 

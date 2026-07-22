@@ -473,11 +473,13 @@ export class CalendarView extends BasesView {
 		allDay: boolean,
 	): Date | null {
 		if (!allDay && (event.allDay || !event.end)) {
-			return new Date(start.getTime() + this.defaultDurationMinutes * 60000);
+			return new Date(
+				start.getTime() + this.defaultDurationMinutes * 60000,
+			);
 		}
-		if (event.end) {
+		if (event.rawEnd) {
 			const delta = start.getTime() - event.start.getTime();
-			return new Date(event.end.getTime() + delta);
+			return new Date(event.rawEnd.getTime() + delta);
 		}
 		return null;
 	}
