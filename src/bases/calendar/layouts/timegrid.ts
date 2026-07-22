@@ -220,12 +220,6 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 	private renderAllDay(days: Date[], ctx: LayoutContext): void {
 		this.alldayEl.empty();
 
-		const hasAllDay = ctx.events.some(
-			(ev) => ev.allDay && days.some((day) => eventCoversDay(ev, day)),
-		);
-		this.alldayEl.style.display = hasAllDay ? "" : "none";
-		if (!hasAllDay) return;
-
 		this.alldayEl.createDiv({
 			cls: "obsilities-calendar-timegrid-gutter-label",
 			text: "All-day",
