@@ -1,17 +1,14 @@
 import { Keymap } from "obsidian";
-import {
-	endOfMonth,
-	formatTime,
-	sameDay,
-	startOfDay,
-	toLocalISODate,
-} from "../dates";
-import type {
-	CalendarEvent,
-	CalendarLayoutRenderer,
-	LayoutContext,
-} from "../types";
-import { coveredDays, sortEvents } from "./shared";
+import { endOfMonth, formatTime, fromLocalISODate, sameDay, startOfDay } from "../dates";
+import type { CalendarEvent, CalendarLayoutRenderer, LayoutContext } from "../types";
+import { groupByDay, sortEvents } from "./shared";
+
+function timeLabel(event: CalendarEvent, day: Date): string {
+	if (event.allDay) return "All-day";
+	if (sameDay(day, event.start)) return formatTime(event.start);
+	if (event.end && sameDay(day, event.end)) return formatTime(event.end);
+	return "All-day";
+}
 
 export class AgendaLayout implements CalendarLayoutRenderer {
 	private root: HTMLElement;
@@ -32,22 +29,19 @@ export class AgendaLayout implements CalendarLayoutRenderer {
 			startOfDay(ctx.today).getTime(),
 		);
 		const monthEnd = endOfMonth(ctx.anchor).getTime();
-		const groups = new Map<
-			string,
-			{ day: Date; events: CalendarEvent[] }
-		>();
-		for (const event of ctx.events) {
-			for (const day of coveredDays(event)) {
-				const time = day.getTime();
-				if (time < from || time > monthEnd) continue;
-				const iso = toLocalISODate(day);
-				const group = groups.get(iso);
-				if (group) group.events.push(event);
-				else groups.set(iso, { day, events: [event] });
-			}
-		}
+		const byDay = groupByDay(ctx.events);
 
-		if (groups.size === 0) {
+		const days = Array.from(byDay.keys())
+			.sort()
+			.map((iso) => ({ iso, day: fromLocalISODate(iso) }))
+			.filter(
+				(d): d is { iso: string; day: Date } =>
+					d.day !== null &&
+					d.day.getTime() >= from &&
+					d.day.getTime() <= monthEnd,
+			);
+
+		if (days.length === 0) {
 			this.root.createDiv({
 				cls: "obsilities-calendar-empty",
 				text: "No upcoming events this month.",
@@ -55,23 +49,18 @@ export class AgendaLayout implements CalendarLayoutRenderer {
 			return;
 		}
 
-		for (const key of Array.from(groups.keys()).sort()) {
-			const group = groups.get(key);
-			if (!group) continue;
-			group.events.sort(sortEvents);
-			this.buildDayGroup(group.day, group.events, ctx);
+		for (const { iso, day } of days) {
+			const events = (byDay.get(iso) ?? []).slice().sort(sortEvents);
+			this.buildDayGroup(day, events, ctx);
 		}
 	}
 
-	private buildDayGroup(
-		day: Date,
-		events: CalendarEvent[],
-		ctx: LayoutContext,
-	): void {
+	private buildDayGroup(day: Date, events: CalendarEvent[], ctx: LayoutContext): void {
 		const group = this.root.createDiv({
 			cls: "obsilities-calendar-agenda-group",
 		});
-		const header = group.createDiv({
+		if (sameDay(day, ctx.today)) group.addClass("is-today");
+		group.createDiv({
 			cls: "obsilities-calendar-agenda-date",
 			text: day.toLocaleDateString(undefined, {
 				weekday: "long",
@@ -79,7 +68,6 @@ export class AgendaLayout implements CalendarLayoutRenderer {
 				day: "numeric",
 			}),
 		});
-		if (sameDay(day, ctx.today)) header.addClass("is-today");
 
 		const list = group.createDiv({
 			cls: "obsilities-calendar-agenda-list",
@@ -99,21 +87,20 @@ export class AgendaLayout implements CalendarLayoutRenderer {
 			cls: "obsilities-calendar-agenda-item",
 			attr: { "data-event-id": event.id },
 		});
-		const isStart = sameDay(day, event.start);
 		row.createDiv({
 			cls: "obsilities-calendar-agenda-time",
-			text: event.allDay
-				? "All-day"
-				: isStart
-					? formatTime(event.start)
-					: "",
+			text: timeLabel(event, day),
 		});
 		row.createDiv({
 			cls: "obsilities-calendar-agenda-title",
 			text: event.title,
 		});
 		row.addEventListener("click", (e) => {
-			ctx.callbacks.open(event.path, !!Keymap.isModEvent(e));
+			if (Keymap.isModEvent(e)) {
+				ctx.callbacks.open(event.path, true);
+				return;
+			}
+			ctx.callbacks.viewDay(day, event.id);
 		});
 		row.addEventListener("auxclick", (e) => {
 			if (e.button !== 1) return;

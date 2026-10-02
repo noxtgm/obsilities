@@ -1,29 +1,31 @@
 import {
+	DAY_MINUTES,
 	addDays,
 	addMinutes,
+	atMinutes,
 	formatHourLabel,
 	formatTime,
 	fromLocalISODate,
 	minutesSinceMidnight,
 	sameDay,
+	sameMinute,
+	spanMinutesIntoDay,
 	startOfDay,
+	startOfNextDay,
 	startOfWeek,
 	toLocalISODate,
 } from "../dates";
-import type {
-	CalendarEvent,
-	CalendarLayoutRenderer,
-	LayoutContext,
-} from "../types";
+import type { CalendarEvent, CalendarLayoutRenderer, LayoutContext } from "../types";
 import {
+	DragDecorations,
 	allDayDropEnd,
 	attachChipInteractions,
+	buildChip,
 	dayDelta,
-	eventCoversDay,
 	eventNodes,
-	nextDragGeneration,
+	groupByDay,
+	registerPointerDrag,
 	renderDaySpanPreview,
-	settleAfterDrop,
 	shiftEventStart,
 	sortEvents,
 } from "./shared";
@@ -35,13 +37,12 @@ type TimeGridZone = {
 	day: Date;
 };
 
-const HOURS = 24;
-const HOUR_HEIGHT = 44; // px per hour, keep in sync with styles.css
-const DAY_MINUTES = HOURS * 60;
+const HOURS = DAY_MINUTES / 60;
+const HOUR_HEIGHT = 38; // px per hour, keep in sync with styles.css
 const SNAP_MINUTES = 15;
 const MIN_BLOCK_HEIGHT = 6;
 const COMPACT_BLOCK_HEIGHT = 36;
-const TINY_BLOCK_HEIGHT = 20;
+const TINY_BLOCK_HEIGHT = 18;
 const INITIAL_SCROLL_HOUR = 7;
 const MIN_BLOCK_MINUTES = (MIN_BLOCK_HEIGHT / HOUR_HEIGHT) * 60;
 
@@ -80,20 +81,19 @@ function segmentsForDay(
 	defaultMinutes: number,
 ): DaySegment[] {
 	const dayStart = startOfDay(day).getTime();
-	const dayEnd = dayStart + DAY_MINUTES * 60000;
+	const dayEnd = startOfNextDay(day).getTime();
 	const segments: DaySegment[] = [];
 	for (const event of events) {
 		if (event.allDay) continue;
 		const start = event.start.getTime();
 		const end = endTimeOf(event, defaultMinutes);
-		if (end <= dayStart || start >= dayEnd) continue;
-		const startMin = (Math.max(start, dayStart) - dayStart) / 60000;
-		const endMin = (Math.min(end, dayEnd) - dayStart) / 60000;
+		const span = spanMinutesIntoDay(start, end, dayStart, dayEnd);
+		if (!span) continue;
 		segments.push({
 			event,
-			startMin,
-			endMin,
-			paintedEndMin: paintedEnd(startMin, endMin),
+			startMin: span.startMin,
+			endMin: span.endMin,
+			paintedEndMin: paintedEnd(span.startMin, span.endMin),
 			continuesBefore: start < dayStart,
 			continuesAfter: end > dayEnd,
 		});
@@ -126,10 +126,7 @@ function laneOrder(a: DaySegment, b: DaySegment): number {
 function clusterSegments(segments: DaySegment[]): DaySegment[][] {
 	const sorted = segments
 		.slice()
-		.sort(
-			(a, b) =>
-				a.startMin - b.startMin || a.paintedEndMin - b.paintedEndMin,
-		);
+		.sort((a, b) => a.startMin - b.startMin || a.paintedEndMin - b.paintedEndMin);
 
 	const clusters: DaySegment[][] = [];
 	let cluster: DaySegment[] = [];
@@ -178,13 +175,16 @@ function packSegments(segments: DaySegment[]): PlacedSegment[] {
 	return placed;
 }
 
+function nowLineOffset(now: Date): string {
+	return `${(minutesSinceMidnight(now) / 60) * HOUR_HEIGHT}px`;
+}
+
 export class TimeGridLayout implements CalendarLayoutRenderer {
 	private root: HTMLElement;
 	private headerEl: HTMLElement;
 	private alldayEl: HTMLElement;
 	private bodyEl: HTMLElement;
-	private previewEls: HTMLElement[] = [];
-	private dropTarget: HTMLElement | null = null;
+	private decorations = new DragDecorations();
 	private initialized = false;
 
 	constructor(
@@ -228,12 +228,26 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 		this.renderAllDay(days, ctx);
 		this.renderBody(days, ctx);
 
-		if (!this.initialized) {
+		if (ctx.focusEventId && this.centerOnEvent(ctx.focusEventId)) {
+			this.initialized = true;
+		} else if (!this.initialized) {
 			this.bodyEl.scrollTop = INITIAL_SCROLL_HOUR * HOUR_HEIGHT;
 			this.initialized = true;
 		} else {
 			this.bodyEl.scrollTop = scrollTop;
 		}
+	}
+
+	private centerOnEvent(eventId: string): boolean {
+		const block = eventNodes(this.bodyEl, eventId)[0];
+		if (!block) return false;
+		const blockRect = block.getBoundingClientRect();
+		const bodyRect = this.bodyEl.getBoundingClientRect();
+		const top = blockRect.top - bodyRect.top + this.bodyEl.scrollTop;
+		const centered = top + blockRect.height / 2 - this.bodyEl.clientHeight / 2;
+		const max = this.bodyEl.scrollHeight - this.bodyEl.clientHeight;
+		this.bodyEl.scrollTop = Math.max(0, Math.min(centered, max));
+		return true;
 	}
 
 	private renderHeader(days: Date[], ctx: LayoutContext): void {
@@ -277,13 +291,15 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 			cls: "obsilities-calendar-timegrid-allday-cols",
 		});
 
+		const byDay = groupByDay(ctx.events);
 		for (const day of days) {
+			const iso = toLocalISODate(day);
 			const col = cols.createDiv({
 				cls: "obsilities-calendar-allday-col",
-				attr: { "data-date": toLocalISODate(day) },
+				attr: { "data-date": iso },
 			});
-			const dayEvents = ctx.events
-				.filter((ev) => ev.allDay && eventCoversDay(ev, day))
+			const dayEvents = (byDay.get(iso) ?? [])
+				.filter((ev) => ev.allDay)
 				.sort(sortEvents);
 			for (const event of dayEvents) {
 				this.buildAllDayChip(col, event, ctx, day);
@@ -310,13 +326,19 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 		for (const day of days) {
 			this.buildDayColumn(cols, day, ctx);
 		}
+
+		this.buildNowLineLead(cols, days, ctx);
 	}
 
-	private buildDayColumn(
-		cols: HTMLElement,
-		day: Date,
-		ctx: LayoutContext,
-	): void {
+	private buildNowLineLead(cols: HTMLElement, days: Date[], ctx: LayoutContext): void {
+		const todayIndex = days.findIndex((day) => sameDay(day, ctx.today));
+		if (todayIndex <= 0) return;
+		const lead = cols.createDiv({ cls: "obsilities-calendar-now-line-lead" });
+		lead.style.top = nowLineOffset(ctx.today);
+		lead.style.right = `${((days.length - todayIndex) / days.length) * 100}%`;
+	}
+
+	private buildDayColumn(cols: HTMLElement, day: Date, ctx: LayoutContext): void {
 		const col = cols.createDiv({
 			cls: "obsilities-calendar-timegrid-col",
 			attr: { "data-date": toLocalISODate(day) },
@@ -324,24 +346,20 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 		if (sameDay(day, ctx.today)) col.addClass("is-today");
 
 		for (let h = 0; h < HOURS; h++) {
-			col.createDiv({ cls: "obsilities-calendar-hour-line" });
+			const line = col.createDiv({ cls: "obsilities-calendar-hour-line" });
+			if (h === HOURS - 1) line.addClass("is-day-end");
 		}
 
-		const segments = segmentsForDay(
-			ctx.events,
-			day,
-			ctx.defaultDurationMinutes,
-		);
+		const segments = segmentsForDay(ctx.events, day, ctx.defaultDurationMinutes);
 		for (const placed of packSegments(segments)) {
 			this.buildTimedBlock(col, placed, ctx, day);
 		}
 
 		if (sameDay(day, ctx.today)) {
-			const now = ctx.today;
 			const line = col.createDiv({
 				cls: "obsilities-calendar-now-line",
 			});
-			line.style.top = `${(minutesSinceMidnight(now) / 60) * HOUR_HEIGHT}px`;
+			line.style.top = nowLineOffset(ctx.today);
 		}
 	}
 
@@ -354,8 +372,7 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 		const { segment, lane, lanes } = placed;
 		const { event } = segment;
 		const top = (segment.startMin / 60) * HOUR_HEIGHT;
-		const height =
-			((segment.paintedEndMin - segment.startMin) / 60) * HOUR_HEIGHT;
+		const height = ((segment.paintedEndMin - segment.startMin) / 60) * HOUR_HEIGHT;
 
 		const block = col.createDiv({
 			cls: "obsilities-calendar-event",
@@ -381,20 +398,17 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 			text: event.title,
 		});
 
-		attachChipInteractions(
-			block,
-			event,
-			ctx,
-			this.makeDragSpec(event, ctx, day),
-		);
+		attachChipInteractions(block, event, ctx, this.makeDragSpec(event, ctx, day));
 
+		if (!ctx.editable || !event.editable) return;
 		if (!segment.continuesBefore) {
 			const topHandle = block.createDiv({
 				cls: "obsilities-calendar-event-resize is-top",
 			});
 			this.registerEdgeDrag(topHandle, event, "start", ctx);
 		}
-		if (!segment.continuesAfter) {
+		// The end handle writes the end property, so it needs one to write to
+		if (!segment.continuesAfter && event.endSource) {
 			const bottomHandle = block.createDiv({
 				cls: "obsilities-calendar-event-resize is-bottom",
 			});
@@ -408,20 +422,9 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 		ctx: LayoutContext,
 		day: Date,
 	): void {
-		const chip = col.createDiv({
-			cls: "obsilities-calendar-chip is-allday",
-			attr: { "data-event-id": event.id },
-		});
-		chip.createSpan({
-			cls: "obsilities-calendar-chip-title",
-			text: event.title,
-		});
-		attachChipInteractions(
-			chip,
-			event,
-			ctx,
-			this.makeDragSpec(event, ctx, day),
-		);
+		const chip = buildChip(event, { allDay: true, isStart: false });
+		col.appendChild(chip);
+		attachChipInteractions(chip, event, ctx, this.makeDragSpec(event, ctx, day));
 	}
 
 	private makeDragSpec(
@@ -433,21 +436,20 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 		return {
 			onStart: (x, y) => {
 				const zone = this.zoneAt(x, y);
-				grabMinutes =
-					zone?.kind === "timed" ? this.minutesAt(zone.col, y) : null;
+				grabMinutes = zone?.kind === "timed" ? this.minutesAt(zone.col, y) : null;
 			},
 			onMove: (x, y) => {
 				const zone = this.zoneAt(x, y);
 				if (!zone) return;
 				if (zone.kind === "timed") {
-					this.setDropTarget(null);
+					this.decorations.setDropTarget(null);
 					this.showPreview(
 						this.dropStart(event, zone, y, grabDay, grabMinutes),
 						event,
 						ctx,
 					);
 				} else {
-					this.setDropTarget(zone.col);
+					this.decorations.setDropTarget(zone.col);
 					this.showAllDayPreview(grabDay, zone.day, event);
 				}
 			},
@@ -455,25 +457,16 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 				const zone = this.zoneAt(x, y);
 				if (!zone) return false;
 				const allDay = zone.kind === "allday";
-				const start = this.dropStart(
-					event,
-					zone,
-					y,
-					grabDay,
-					grabMinutes,
-				);
-				if (
-					allDay === event.allDay &&
-					start.getTime() === event.start.getTime()
-				) {
+				const start = this.dropStart(event, zone, y, grabDay, grabMinutes);
+				if (allDay === event.allDay && sameMinute(start, event.start)) {
 					return false;
 				}
 				ctx.callbacks.reschedule(event, start, allDay);
 				return true;
 			},
 			onEnd: () => {
-				this.clearPreview();
-				this.setDropTarget(null);
+				this.decorations.clearPreview();
+				this.decorations.setDropTarget(null);
 			},
 		};
 	}
@@ -488,36 +481,26 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 		const shifted = shiftEventStart(event, grabDay, zone.day);
 		if (zone.kind === "allday") return shifted;
 		if (grabMinutes === null) {
-			const dropped = addMinutes(
-				startOfDay(zone.day),
-				this.snappedMinutes(
-					zone.col,
-					clientY,
-					DAY_MINUTES - SNAP_MINUTES,
-				),
+			const dropped = atMinutes(
+				zone.day,
+				this.snappedMinutes(zone.col, clientY, DAY_MINUTES - SNAP_MINUTES),
 			);
 			return addDays(dropped, -dayDelta(event.start, grabDay));
 		}
 		const delta = this.minutesAt(zone.col, clientY) - grabMinutes;
-		return addMinutes(
-			shifted,
-			Math.round(delta / SNAP_MINUTES) * SNAP_MINUTES,
-		);
+		const snapped = Math.round(delta / SNAP_MINUTES) * SNAP_MINUTES;
+		return atMinutes(shifted, minutesSinceMidnight(shifted) + snapped);
 	}
 
 	private zoneAt(x: number, y: number): TimeGridZone | null {
 		const el = this.root.doc.elementFromPoint(x, y);
 		if (!el) return null;
-		const timed = el.closest<HTMLElement>(
-			".obsilities-calendar-timegrid-col",
-		);
+		const timed = el.closest<HTMLElement>(".obsilities-calendar-timegrid-col");
 		if (timed) {
 			const day = fromLocalISODate(timed.dataset.date ?? "");
 			if (day) return { kind: "timed", col: timed, day };
 		}
-		const allday = el.closest<HTMLElement>(
-			".obsilities-calendar-allday-col",
-		);
+		const allday = el.closest<HTMLElement>(".obsilities-calendar-allday-col");
 		if (allday) {
 			const day = fromLocalISODate(allday.dataset.date ?? "");
 			if (day) return { kind: "allday", col: allday, day };
@@ -525,44 +508,22 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 		return null;
 	}
 
-	private setDropTarget(col: HTMLElement | null): void {
-		if (this.dropTarget === col) return;
-		this.dropTarget?.removeClass("is-drop-target");
-		this.dropTarget = col;
-		col?.addClass("is-drop-target");
-	}
-
-	private showPreview(
-		start: Date,
-		event: CalendarEvent,
-		ctx: LayoutContext,
-	): void {
-		this.clearPreview();
+	private showPreview(start: Date, event: CalendarEvent, ctx: LayoutContext): void {
+		this.decorations.clearPreview();
 		const end = this.droppedEnd(event, start, ctx);
 		this.appendSpanSegments(start, end, event.title);
 	}
 
-	private droppedEnd(
-		event: CalendarEvent,
-		start: Date,
-		ctx: LayoutContext,
-	): Date {
+	private droppedEnd(event: CalendarEvent, start: Date, ctx: LayoutContext): Date {
 		if (event.allDay) {
 			return allDayDropEnd(event, start, ctx.defaultDurationMinutes);
 		}
 		if (!event.end) return addMinutes(start, ctx.defaultDurationMinutes);
-		return addMinutes(
-			start,
-			durationMinutes(event, ctx.defaultDurationMinutes),
-		);
+		return addMinutes(start, durationMinutes(event, ctx.defaultDurationMinutes));
 	}
 
-	private showResizePreview(
-		event: CalendarEvent,
-		start: Date,
-		end: Date,
-	): void {
-		this.clearPreview();
+	private showResizePreview(event: CalendarEvent, start: Date, end: Date): void {
+		this.decorations.clearPreview();
 		this.appendSpanSegments(start, end, event.title);
 	}
 
@@ -571,19 +532,18 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 		let day = startOfDay(start);
 		for (let guard = 0; day.getTime() < endMs && guard < 366; guard++) {
 			const dayStart = day.getTime();
-			const dayEnd = dayStart + DAY_MINUTES * 60000;
+			const next = startOfNextDay(day);
+			const dayEnd = next.getTime();
 			const col = this.timedColForDay(toLocalISODate(day));
-			day = addDays(day, 1);
+			day = next;
 			if (!col) continue; // Day not in view
 
-			const topMin =
-				(Math.max(start.getTime(), dayStart) - dayStart) / 60000;
-			const botMin = (Math.min(endMs, dayEnd) - dayStart) / 60000;
-			if (botMin <= topMin) continue;
+			const span = spanMinutesIntoDay(start.getTime(), endMs, dayStart, dayEnd);
+			if (!span) continue;
 			const continuesBefore = start.getTime() < dayStart;
 			this.appendPreviewSegment(col, {
-				topMin,
-				botMin,
+				topMin: span.startMin,
+				botMin: span.endMin,
 				timeLabel: continuesBefore ? null : formatTime(start),
 				title,
 				continuesBefore,
@@ -609,8 +569,7 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 
 		const top = (seg.topMin / 60) * HOUR_HEIGHT;
 		const height =
-			((paintedEnd(seg.topMin, seg.botMin) - seg.topMin) / 60) *
-			HOUR_HEIGHT;
+			((paintedEnd(seg.topMin, seg.botMin) - seg.topMin) / 60) * HOUR_HEIGHT;
 		if (height < COMPACT_BLOCK_HEIGHT) el.addClass("is-compact");
 		if (height < TINY_BLOCK_HEIGHT) el.addClass("is-tiny");
 		el.style.top = `${top}px`;
@@ -630,7 +589,7 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 		});
 
 		col.appendChild(el);
-		this.previewEls.push(el);
+		this.decorations.addPreview(el);
 	}
 
 	private timedColForDay(iso: string): HTMLElement | null {
@@ -639,14 +598,9 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 		);
 	}
 
-	private showAllDayPreview(
-		grabDay: Date,
-		day: Date,
-		event: CalendarEvent,
-	): void {
-		this.clearPreview();
-		this.previewEls.push(
-			...renderDaySpanPreview(event, grabDay, day, true, (iso) =>
+	private showAllDayPreview(grabDay: Date, day: Date, event: CalendarEvent): void {
+		this.decorations.setPreview(
+			renderDaySpanPreview(event, grabDay, day, true, (iso) =>
 				this.alldayColForDay(iso),
 			),
 		);
@@ -656,11 +610,6 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 		return this.alldayEl.querySelector<HTMLElement>(
 			`.obsilities-calendar-allday-col[data-date="${iso}"]`,
 		);
-	}
-
-	private clearPreview(): void {
-		for (const el of this.previewEls) el.remove();
-		this.previewEls = [];
 	}
 
 	private minutesAt(col: HTMLElement, clientY: number): number {
@@ -687,72 +636,35 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 	): void {
 		handle.addEventListener("click", (e) => e.stopPropagation());
 
-		handle.addEventListener("pointerdown", (e) => {
-			if (e.button !== 0) return;
-			e.preventDefault();
-			e.stopPropagation();
-			const doc = handle.doc;
-			const calRoot = handle.closest<HTMLElement>(".obsilities-calendar");
-			const generation = nextDragGeneration();
-			ctx.callbacks.setDragging(true);
-			calRoot?.addClass("is-dragging-active");
-
-			// Only once the pointer actually moves
-			let hidden: HTMLElement[] = [];
-			const hideSource = (): void => {
-				if (hidden.length > 0) return;
-				hidden = eventNodes(calRoot, event.id);
-				for (const el of hidden) el.addClass("is-dragging");
-			};
-
-			const cleanup = (): void => {
-				doc.removeEventListener("pointermove", onMove);
-				doc.removeEventListener("pointerup", onUp);
-				doc.removeEventListener("pointercancel", onCancel);
-			};
-
-			const finish = (committed: boolean): void => {
-				calRoot?.removeClass("is-dragging-active");
-				ctx.callbacks.setDragging(false);
-				const nodes = hidden;
-				hidden = [];
-				settleAfterDrop(doc, generation, committed, (stale) => {
-					for (const el of nodes) el.removeClass("is-dragging");
-					if (!stale) this.clearPreview();
-				});
-			};
-
-			const onMove = (move: PointerEvent): void => {
-				hideSource();
-				const res = this.edgeResizeAt(
-					move.clientX,
-					move.clientY,
-					event,
-					edge,
-					ctx.defaultDurationMinutes,
-				);
-				if (res) this.showResizePreview(event, res.start, res.end);
-			};
-			const onUp = (up: PointerEvent): void => {
-				cleanup();
-				const res = this.edgeResizeAt(
-					up.clientX,
-					up.clientY,
-					event,
-					edge,
-					ctx.defaultDurationMinutes,
-				);
-				if (res) ctx.callbacks.resize(event, res.start, res.end);
-				finish(!!res);
-			};
-			const onCancel = (): void => {
-				cleanup();
-				finish(false);
-			};
-
-			doc.addEventListener("pointermove", onMove);
-			doc.addEventListener("pointerup", onUp);
-			doc.addEventListener("pointercancel", onCancel);
+		registerPointerDrag(handle, {
+			ctx,
+			eventId: event.id,
+			stopPropagation: true,
+			drag: {
+				onMove: (x, y) => {
+					const res = this.edgeResizeAt(
+						x,
+						y,
+						event,
+						edge,
+						ctx.defaultDurationMinutes,
+					);
+					if (res) this.showResizePreview(event, res.start, res.end);
+				},
+				onDrop: (x, y) => {
+					const res = this.edgeResizeAt(
+						x,
+						y,
+						event,
+						edge,
+						ctx.defaultDurationMinutes,
+					);
+					if (!res) return false;
+					ctx.callbacks.resize(event, res.start, res.end);
+					return true;
+				},
+				onEnd: () => this.decorations.clearPreview(),
+			},
 		});
 	}
 
@@ -766,7 +678,7 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 		const zone = this.zoneAt(clientX, clientY);
 		if (!zone || zone.kind !== "timed") return null;
 		const minutes = this.snappedMinutes(zone.col, clientY, DAY_MINUTES);
-		const candidate = addMinutes(startOfDay(zone.day), minutes).getTime();
+		const candidate = atMinutes(zone.day, minutes).getTime();
 		const minMs = SNAP_MINUTES * 60000;
 		if (edge === "end") {
 			const startMs = event.start.getTime();

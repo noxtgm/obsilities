@@ -36,6 +36,8 @@ export const DEFAULT_SMART_TYPOGRAPHY: SmartTypographySettings = {
 	closeSingle: "\u2019",
 };
 
+export const HEADER_BUTTON_KEY_VERSION = 2;
+
 export interface ObsilitiesSettings {
 	readableLineWidth: number;
 	fileExplorerIcons: boolean;
@@ -46,7 +48,7 @@ export interface ObsilitiesSettings {
 	hideNewTabButton: boolean;
 	hideTabList: boolean;
 	hideVaultProfile: boolean;
-	defaultGraphView: boolean;
+	headerButtonKeyVersion: number;
 	headerButtonOrder: string[];
 	hiddenHeaderButtons: Record<string, boolean>;
 	smartTypography: SmartTypographySettings;
@@ -63,8 +65,29 @@ export const DEFAULT_SETTINGS: ObsilitiesSettings = {
 	hideNewTabButton: true,
 	hideTabList: true,
 	hideVaultProfile: true,
-	defaultGraphView: true,
+	headerButtonKeyVersion: HEADER_BUTTON_KEY_VERSION,
 	headerButtonOrder: [],
 	hiddenHeaderButtons: {},
 	smartTypography: { ...DEFAULT_SMART_TYPOGRAPHY },
 };
+
+export function pickKnownSettings(
+	saved: Partial<ObsilitiesSettings> | null,
+): Partial<ObsilitiesSettings> {
+	if (!saved) return {};
+	const known: Record<string, unknown> = {};
+	for (const key of Object.keys(DEFAULT_SETTINGS)) {
+		if (key in saved) known[key] = (saved as Record<string, unknown>)[key];
+	}
+	return known as Partial<ObsilitiesSettings>;
+}
+
+export function pickHiddenButtons(
+	saved: Record<string, boolean> | undefined,
+): Record<string, boolean> {
+	const hidden: Record<string, boolean> = {};
+	for (const [key, isHidden] of Object.entries(saved ?? {})) {
+		if (key && isHidden === true) hidden[key] = true;
+	}
+	return hidden;
+}

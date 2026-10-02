@@ -1,11 +1,5 @@
 import { Keymap } from "obsidian";
-import {
-	addDays,
-	addMinutes,
-	formatTime,
-	startOfDay,
-	toLocalISODate,
-} from "../dates";
+import { addDays, addMinutes, formatTime, startOfDay, toLocalISODate } from "../dates";
 import type { CalendarEvent, LayoutContext } from "../types";
 
 const MAX_SPAN_DAYS = 366;
@@ -30,7 +24,7 @@ function lastCoveredDay(event: CalendarEvent): Date {
 	return startOfDay(new Date(Math.max(lastTime, first.getTime())));
 }
 
-export function coveredDays(event: CalendarEvent): Date[] {
+function coveredDays(event: CalendarEvent): Date[] {
 	const first = startOfDay(event.start);
 	const last = lastCoveredDay(event).getTime();
 	const days: Date[] = [];
@@ -67,17 +61,7 @@ export function shiftEventStart(
 	return addDays(event.start, dayDelta(grabDay, targetDay));
 }
 
-export function eventCoversDay(event: CalendarEvent, day: Date): boolean {
-	const d = startOfDay(day).getTime();
-	return (
-		d >= startOfDay(event.start).getTime() &&
-		d <= lastCoveredDay(event).getTime()
-	);
-}
-
-export function groupByDay(
-	events: CalendarEvent[],
-): Map<string, CalendarEvent[]> {
+export function groupByDay(events: CalendarEvent[]): Map<string, CalendarEvent[]> {
 	const map = new Map<string, CalendarEvent[]>();
 	for (const ev of events) {
 		for (const day of coveredDays(ev)) {
@@ -100,11 +84,11 @@ export interface DragSpec {
 const SETTLE_MS = 700;
 let dragGeneration = 0;
 
-export function nextDragGeneration(): number {
+function nextDragGeneration(): number {
 	return ++dragGeneration;
 }
 
-export function settleAfterDrop(
+function settleAfterDrop(
 	doc: Document,
 	generation: number,
 	committed: boolean,
@@ -118,14 +102,95 @@ export function settleAfterDrop(
 	(doc.defaultView ?? window).setTimeout(run, SETTLE_MS);
 }
 
-export function eventNodes(
-	root: HTMLElement | null,
-	eventId: string,
-): HTMLElement[] {
+export function eventNodes(root: HTMLElement | null, eventId: string): HTMLElement[] {
 	if (!root) return [];
-	return Array.from(
-		root.querySelectorAll<HTMLElement>("[data-event-id]"),
-	).filter((el) => el.dataset.eventId === eventId);
+	return Array.from(root.querySelectorAll<HTMLElement>("[data-event-id]")).filter(
+		(el) => el.dataset.eventId === eventId,
+	);
+}
+
+interface PointerDragOptions {
+	ctx: LayoutContext;
+	eventId: string;
+	drag: DragSpec;
+	threshold?: number;
+	stopPropagation?: boolean;
+	onClick?: (e: PointerEvent) => void;
+}
+
+export function registerPointerDrag(el: HTMLElement, opts: PointerDragOptions): void {
+	const { ctx, eventId, drag } = opts;
+	const threshold = opts.threshold ?? 0;
+
+	el.addEventListener("pointerdown", (e) => {
+		if (e.button !== 0) return;
+		e.preventDefault();
+		if (opts.stopPropagation) e.stopPropagation();
+
+		const startX = e.clientX;
+		const startY = e.clientY;
+		const doc = el.doc;
+		const root = el.closest<HTMLElement>(".obsilities-calendar");
+		let dragging = false;
+		let hidden: HTMLElement[] = [];
+		let generation = 0;
+
+		const begin = (): void => {
+			drag.onStart?.(startX, startY);
+			dragging = true;
+			generation = nextDragGeneration();
+			ctx.callbacks.setDragging(true);
+			const nodes = eventNodes(root, eventId);
+			hidden = nodes.length > 0 ? nodes : [el];
+			for (const node of hidden) node.addClass("is-dragging");
+			root?.addClass("is-dragging-active");
+		};
+
+		const end = (committed: boolean): void => {
+			root?.removeClass("is-dragging-active");
+			ctx.callbacks.setDragging(false);
+			const nodes = hidden;
+			hidden = [];
+			settleAfterDrop(doc, generation, committed, (stale) => {
+				for (const node of nodes) node.removeClass("is-dragging");
+				if (!stale) drag.onEnd();
+			});
+		};
+
+		const cleanup = (): void => {
+			doc.removeEventListener("pointermove", onMove);
+			doc.removeEventListener("pointerup", onUp);
+			doc.removeEventListener("pointercancel", onCancel);
+		};
+
+		const onMove = (move: PointerEvent): void => {
+			if (!dragging) {
+				if (
+					Math.abs(move.clientX - startX) < threshold &&
+					Math.abs(move.clientY - startY) < threshold
+				) {
+					return;
+				}
+				begin();
+			}
+			drag.onMove(move.clientX, move.clientY);
+		};
+
+		const onUp = (up: PointerEvent): void => {
+			cleanup();
+			if (dragging) end(drag.onDrop(up.clientX, up.clientY));
+			else opts.onClick?.(up);
+		};
+
+		const onCancel = (): void => {
+			cleanup();
+			if (dragging) end(false);
+		};
+
+		doc.addEventListener("pointermove", onMove);
+		doc.addEventListener("pointerup", onUp);
+		doc.addEventListener("pointercancel", onCancel);
+	});
 }
 
 export function attachChipInteractions(
@@ -140,88 +205,62 @@ export function attachChipInteractions(
 		ctx.callbacks.openBackground(event.path);
 	});
 
-	const root = chip.closest<HTMLElement>(".obsilities-calendar");
+	if (!ctx.editable || !event.editable) {
+		chip.addEventListener("click", (e) => {
+			ctx.callbacks.open(event.path, !!Keymap.isModEvent(e));
+		});
+		return;
+	}
 
-	chip.addEventListener("pointerdown", (e) => {
-		if (e.button !== 0) return;
-		e.preventDefault();
-		const startX = e.clientX;
-		const startY = e.clientY;
-		const doc = chip.doc;
-		let dragging = false;
-		let hidden: HTMLElement[] = [];
-		let generation = 0;
-
-		const begin = (): void => {
-			drag.onStart?.(startX, startY);
-			dragging = true;
-			generation = nextDragGeneration();
-			ctx.callbacks.setDragging(true);
-			const nodes = eventNodes(root, event.id);
-			hidden = nodes.length > 0 ? nodes : [chip];
-			for (const el of hidden) el.addClass("is-dragging");
-			root?.addClass("is-dragging-active");
-		};
-
-		const end = (committed: boolean): void => {
-			root?.removeClass("is-dragging-active");
-			ctx.callbacks.setDragging(false);
-			const nodes = hidden;
-			hidden = [];
-			settleAfterDrop(doc, generation, committed, (stale) => {
-				for (const el of nodes) el.removeClass("is-dragging");
-				if (!stale) drag.onEnd();
-			});
-		};
-
-		const cleanup = (): void => {
-			doc.removeEventListener("pointermove", onMove);
-			doc.removeEventListener("pointerup", onUp);
-			doc.removeEventListener("pointercancel", onCancel);
-		};
-
-		const onMove = (move: PointerEvent): void => {
-			if (!dragging) {
-				if (
-					Math.abs(move.clientX - startX) < DRAG_THRESHOLD &&
-					Math.abs(move.clientY - startY) < DRAG_THRESHOLD
-				) {
-					return;
-				}
-				begin();
-			}
-			drag.onMove(move.clientX, move.clientY);
-		};
-
-		const onUp = (up: PointerEvent): void => {
-			cleanup();
-			if (dragging) {
-				end(drag.onDrop(up.clientX, up.clientY));
-			} else {
-				ctx.callbacks.open(event.path, !!Keymap.isModEvent(up));
-			}
-		};
-
-		const onCancel = (): void => {
-			cleanup();
-			if (dragging) end(false);
-		};
-
-		doc.addEventListener("pointermove", onMove);
-		doc.addEventListener("pointerup", onUp);
-		doc.addEventListener("pointercancel", onCancel);
+	registerPointerDrag(chip, {
+		ctx,
+		eventId: event.id,
+		drag,
+		threshold: DRAG_THRESHOLD,
+		onClick: (e) => ctx.callbacks.open(event.path, !!Keymap.isModEvent(e)),
 	});
 }
 
-function buildPreviewChip(
-	event: CalendarEvent,
-	allDay: boolean,
-	isStart = true,
-): HTMLElement {
-	const chip = createDiv({ cls: "obsilities-calendar-chip is-preview" });
-	if (allDay || event.allDay) {
+export class DragDecorations {
+	private previewEls: HTMLElement[] = [];
+	private dropTarget: HTMLElement | null = null;
+
+	setDropTarget(el: HTMLElement | null): void {
+		if (this.dropTarget === el) return;
+		this.dropTarget?.removeClass("is-drop-target");
+		this.dropTarget = el;
+		el?.addClass("is-drop-target");
+	}
+
+	setPreview(els: HTMLElement[]): void {
+		this.clearPreview();
+		this.previewEls = els;
+	}
+
+	addPreview(el: HTMLElement): void {
+		this.previewEls.push(el);
+	}
+
+	clearPreview(): void {
+		for (const el of this.previewEls) el.remove();
+		this.previewEls = [];
+	}
+}
+
+interface ChipOptions {
+	allDay: boolean;
+	isStart: boolean;
+	preview?: boolean;
+}
+
+export function buildChip(event: CalendarEvent, opts: ChipOptions): HTMLElement {
+	const chip = createDiv({ cls: "obsilities-calendar-chip" });
+	if (opts.preview) chip.addClass("is-preview");
+	else chip.dataset.eventId = event.id;
+
+	if (opts.allDay) {
 		chip.addClass("is-allday");
-	} else if (isStart) {
+	} else if (opts.isStart) {
 		chip.createSpan({
 			cls: "obsilities-calendar-chip-time",
 			text: formatTime(event.start),
@@ -247,7 +286,11 @@ export function renderDaySpanPreview(
 		const iso = toLocalISODate(addDays(covered, delta));
 		const container = resolveContainer(iso);
 		if (!container) return; // Day not in the visible range
-		const chip = buildPreviewChip(event, allDay, i === 0);
+		const chip = buildChip(event, {
+			allDay: allDay || event.allDay,
+			isStart: i === 0,
+			preview: true,
+		});
 		container.prepend(chip);
 		chips.push(chip);
 	});

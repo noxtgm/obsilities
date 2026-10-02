@@ -71,7 +71,7 @@ export function buildInputRules(
 
 const IGNORE_LIST_REGEX = /frontmatter|code|math|templater|hashtag/;
 
-export interface SmartTypographyContext {
+interface SmartTypographyContext {
 	getSettings: () => SmartTypographySettings;
 	getInputRuleMap: () => Record<string, InputRule[]>;
 }
@@ -91,6 +91,7 @@ export function createSmartTypographyExtension(
 					return e.value as TransactionSpec | null;
 				}
 			}
+			if (tr.docChanged) return null;
 			if (
 				!oldVal ||
 				tr.isUserEvent("input") ||
@@ -109,10 +110,7 @@ export function createSmartTypographyExtension(
 	return [
 		prevTransactionState,
 		EditorState.transactionFilter.of((tr) => {
-			if (
-				tr.isUserEvent("delete.backward") ||
-				tr.isUserEvent("delete.selection")
-			) {
+			if (tr.isUserEvent("delete.backward") || tr.isUserEvent("delete.selection")) {
 				const revert = tr.startState.field(prevTransactionState, false);
 				if (revert) return revert;
 				return tr;
@@ -135,84 +133,96 @@ export function createSmartTypographyExtension(
 				if (!tree) tree = syntaxTree(tr.state);
 				const nodeName = tree.resolveInner(pos, 1).type.name;
 				const skip =
-					typeof nodeName === "string" &&
-					IGNORE_LIST_REGEX.test(nodeName);
+					typeof nodeName === "string" && IGNORE_LIST_REGEX.test(nodeName);
 				seenPositions[pos] = !skip;
 				return seenPositions[pos];
 			};
 
-			const changes: ChangeSpec[] = [];
-			const reverts: ChangeSpec[] = [];
-			const registerChange = (change: ChangeSpec, revert: ChangeSpec) => {
-				changes.push(change);
-				reverts.push(revert);
+			const contextCache: Record<string, string> = {};
+			const readContext = (end: number, length: number): string => {
+				const cacheKey = `${end}:${length}`;
+				const cached = contextCache[cacheKey];
+				if (cached !== undefined) return cached;
+				const value = tr.newDoc.sliceString(Math.max(0, end - length), end);
+				contextCache[cacheKey] = value;
+				return value;
 			};
 
-			const contextCache: Record<string, string> = {};
-			let newSelection: EditorSelection =
-				tr.selection ?? tr.startState.selection;
+			const changes: ChangeSpec[] = [];
+			const reverts: ChangeSpec[] = [];
+			const shifts: { pos: number; delta: number }[] = [];
+			let netDelta = 0;
 
-			tr.changes.iterChanges((fromA, toA, fromB, toB, inserted) => {
-				const insertedText = inserted.sliceString(0, inserted.length);
+			const applyRule = (
+				fromA: number,
+				toA: number,
+				fromB: number,
+				insertedText: string,
+			): boolean => {
 				const matchedRules = inputRuleMap[insertedText];
-				if (!matchedRules) return;
+				if (!matchedRules?.length) return false;
+				if (!canPerformReplacement(fromB)) return false;
 
 				for (const rule of matchedRules) {
-					if (!canPerformReplacement(fromA)) return;
-
 					const contextLength = Math.max(3, rule.from.length);
-					const cacheKey = `${fromB}:${contextLength}`;
-					if (contextCache[cacheKey] === undefined) {
-						contextCache[cacheKey] = tr.newDoc.sliceString(
-							Math.max(0, fromB - contextLength),
-							fromB,
-						);
+					if (!rule.contextMatch.test(readContext(fromB, contextLength))) {
+						continue;
 					}
-					const contextStr = contextCache[cacheKey];
-					if (!rule.contextMatch.test(contextStr)) continue;
 
 					const insert =
-						typeof rule.to === "string"
-							? rule.to
-							: rule.to(settings);
-					const replacementLength =
-						rule.from.length - rule.trigger.length;
+						typeof rule.to === "string" ? rule.to : rule.to(settings);
+					const replacementLength = rule.from.length - rule.trigger.length;
 					const insertionPoint = fromA - replacementLength;
 					const reversionPoint = fromB - replacementLength;
 
-					registerChange(
-						{
-							from: insertionPoint,
-							to: insertionPoint + replacementLength,
-							insert,
-						},
-						{
-							from: reversionPoint,
-							to: reversionPoint + insert.length,
-							insert: rule.from,
-						},
-					);
+					changes.push({
+						from: insertionPoint,
+						to: toA,
+						insert,
+					});
+					reverts.push({
+						from: reversionPoint - netDelta,
+						to: reversionPoint - netDelta + insert.length,
+						insert: rule.from,
+					});
 
-					const selectionAdjustment =
-						rule.from.length - insert.length;
-					const updated = EditorSelection.create(
-						newSelection.ranges.map((r) =>
-							EditorSelection.range(
-								r.anchor - selectionAdjustment,
-								r.head - selectionAdjustment,
-							),
-						),
-					);
-					if (updated) newSelection = updated;
-					return;
+					const delta = rule.from.length - insert.length;
+					if (delta !== 0) shifts.push({ pos: reversionPoint, delta });
+					netDelta += delta;
+					return true;
 				}
+				return false;
+			};
+
+			tr.changes.iterChanges((fromA, toA, fromB, _toB, inserted) => {
+				const insertedText = inserted.sliceString(0, inserted.length);
+				if (applyRule(fromA, toA, fromB, insertedText)) return;
+				changes.push({ from: fromA, to: toA, insert: inserted });
 			});
 
-			if (changes.length === 0) return tr;
+			if (reverts.length === 0) return tr;
+
+			const shiftPos = (pos: number): number => {
+				let shifted = pos;
+				for (const shift of shifts) {
+					if (shift.pos < pos) shifted -= shift.delta;
+				}
+				return Math.max(0, shifted);
+			};
+
+			const baseSelection = tr.newSelection;
+			const newSelection = shifts.length
+				? EditorSelection.create(
+						baseSelection.ranges.map((r) =>
+							EditorSelection.range(shiftPos(r.anchor), shiftPos(r.head)),
+						),
+						baseSelection.mainIndex,
+					)
+				: baseSelection;
 
 			const revertSpec: TransactionSpec = {
 				effects: storeTransaction.of(null),
-				selection: tr.selection,
+				selection: baseSelection,
 				scrollIntoView: tr.scrollIntoView ?? false,
 				changes: reverts,
 			};

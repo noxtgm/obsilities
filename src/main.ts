@@ -1,15 +1,16 @@
 import { Plugin, Platform, setIcon, Menu, TFolder, debounce } from "obsidian";
-import { DEFAULT_SETTINGS, DEFAULT_SMART_TYPOGRAPHY } from "./types";
-import { KANBAN_VIEW_TYPE, KanbanView } from "./bases/kanban";
+import {
+	DEFAULT_SETTINGS,
+	DEFAULT_SMART_TYPOGRAPHY,
+	HEADER_BUTTON_KEY_VERSION,
+	pickHiddenButtons,
+	pickKnownSettings,
+} from "./types";
 import { CALENDAR_VIEW_TYPE } from "./bases/calendar/types";
 import { CalendarView } from "./bases/calendar/view";
 import { ObsilitiesSettingTab } from "./settings";
-import {
-	buildInputRules,
-	createSmartTypographyExtension,
-} from "./typography/extension";
+import { buildInputRules, createSmartTypographyExtension } from "./typography/extension";
 
-import type { WorkspaceLeaf } from "obsidian";
 import type { InputRule } from "./typography/inputRules";
 import type { ObsilitiesSettings } from "./types";
 
@@ -40,7 +41,13 @@ export default class ObsilitiesPlugin extends Plugin {
 	async onload(): Promise<void> {
 		await this.loadSettings();
 
-		this.registerBasesViews();
+		this.registerBasesView(CALENDAR_VIEW_TYPE, {
+			name: "Calendar",
+			icon: "calendar",
+			factory: (controller, containerEl) =>
+				new CalendarView(controller, containerEl),
+			options: CalendarView.getViewOptions,
+		});
 
 		this.buildSmartTypographyRules();
 		this.registerEditorExtension(
@@ -60,23 +67,12 @@ export default class ObsilitiesPlugin extends Plugin {
 			if (Platform.isDesktopApp) {
 				this.injectHeaderButtons();
 			}
-			this.openGraphIfEmpty();
 			this.updateFolderColors();
 		});
 
-		this.registerEvent(
-			this.app.workspace.on("layout-change", () => {
-				this.openGraphIfEmpty();
-			}),
-		);
-
 		// Rebuild folder colors when the top-level folder set may have changed
 		// updateFolderColors() no-ops when the sorted top-level names are unchanged
-		const scheduleFolderColors = debounce(
-			() => this.updateFolderColors(),
-			300,
-			true,
-		);
+		const scheduleFolderColors = debounce(() => this.updateFolderColors(), 300, true);
 		this.registerEvent(this.app.vault.on("create", scheduleFolderColors));
 		this.registerEvent(this.app.vault.on("delete", scheduleFolderColors));
 		this.registerEvent(this.app.vault.on("rename", scheduleFolderColors));
@@ -99,24 +95,6 @@ export default class ObsilitiesPlugin extends Plugin {
 			"obsilities-file-icons",
 			"obsilities-folder-colors",
 		);
-	}
-
-	private registerBasesViews(): void {
-		this.registerBasesView(KANBAN_VIEW_TYPE, {
-			name: "Kanban",
-			icon: "square-kanban",
-			factory: (controller, containerEl) =>
-				new KanbanView(controller, containerEl),
-			options: KanbanView.getViewOptions,
-		});
-
-		this.registerBasesView(CALENDAR_VIEW_TYPE, {
-			name: "Calendar",
-			icon: "calendar",
-			factory: (controller, containerEl) =>
-				new CalendarView(controller, containerEl),
-			options: CalendarView.getViewOptions,
-		});
 	}
 
 	applyBodyClasses(): void {
@@ -168,9 +146,7 @@ export default class ObsilitiesPlugin extends Plugin {
 
 		const folders = this.app.vault
 			.getRoot()
-			.children.filter(
-				(child): child is TFolder => child instanceof TFolder,
-			)
+			.children.filter((child): child is TFolder => child instanceof TFolder)
 			.sort((a, b) => a.name.localeCompare(b.name));
 
 		const HUE_START = 210;
@@ -181,9 +157,7 @@ export default class ObsilitiesPlugin extends Plugin {
 				count > 1
 					? Math.round(HUE_START + (HUE_SPAN / (count - 1)) * i)
 					: HUE_START;
-			const path = folder.name
-				.replace(/\\/g, "\\\\")
-				.replace(/"/g, '\\"');
+			const path = folder.name.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 			return (
 				`body.obsilities-folder-colors .nav-folder-title[data-path="${path}"],\n` +
 				`body.obsilities-folder-colors .nav-folder-title[data-path^="${path}/"],\n` +
@@ -193,10 +167,7 @@ export default class ObsilitiesPlugin extends Plugin {
 		});
 
 		const css = rules.join("\n\n");
-		if (
-			this.folderColorStyleEl &&
-			this.folderColorStyleEl.textContent === css
-		) {
+		if (this.folderColorStyleEl && this.folderColorStyleEl.textContent === css) {
 			return;
 		}
 		if (!this.folderColorStyleEl) {
@@ -212,11 +183,17 @@ export default class ObsilitiesPlugin extends Plugin {
 	}
 
 	async loadSettings(): Promise<void> {
-		const saved =
-			(await this.loadData()) as Partial<ObsilitiesSettings> | null;
+		const saved = (await this.loadData()) as Partial<ObsilitiesSettings> | null;
+		const keysCurrent = saved?.headerButtonKeyVersion === HEADER_BUTTON_KEY_VERSION;
+
 		this.settings = {
 			...DEFAULT_SETTINGS,
-			...saved,
+			...pickKnownSettings(saved),
+			headerButtonKeyVersion: HEADER_BUTTON_KEY_VERSION,
+			headerButtonOrder: keysCurrent ? [...(saved?.headerButtonOrder ?? [])] : [],
+			hiddenHeaderButtons: keysCurrent
+				? pickHiddenButtons(saved?.hiddenHeaderButtons)
+				: {},
 			smartTypography: {
 				...DEFAULT_SMART_TYPOGRAPHY,
 				...saved?.smartTypography,
@@ -234,7 +211,7 @@ export default class ObsilitiesPlugin extends Plugin {
 		const workspace = document.querySelector(".workspace");
 		if (!ribbon || !workspace) return;
 
-		// Hide the ribbon entirely via body class (styling lives in styles.css)
+		// Hide the ribbon entirely via body class
 		document.body.classList.add("obsilities-active");
 
 		// Create container in the top bar
@@ -258,9 +235,7 @@ export default class ObsilitiesPlugin extends Plugin {
 		this.headerContainer.appendChild(this.sidebarTabsContainer);
 
 		// Separator between sidebar tabs and ribbon buttons
-		this.headerContainer.appendChild(
-			createDiv({ cls: "obsilities-separator" }),
-		);
+		this.headerContainer.appendChild(createDiv({ cls: "obsilities-separator" }));
 
 		// Trailing separator appended now so ribbon buttons can always insert before it
 		const trailingSep = createDiv({ cls: "obsilities-separator-trailing" });
@@ -398,12 +373,8 @@ export default class ObsilitiesPlugin extends Plugin {
 		this.sidebarTabsContainer.empty();
 
 		// Create a simple icon button for each tab header
-		for (const original of Array.from(
-			originalInner.children,
-		) as HTMLElement[]) {
-			const icon = original.querySelector(
-				".workspace-tab-header-inner-icon",
-			);
+		for (const original of Array.from(originalInner.children) as HTMLElement[]) {
+			const icon = original.querySelector(".workspace-tab-header-inner-icon");
 			if (!icon) continue;
 
 			const btn = createDiv({
@@ -450,9 +421,7 @@ export default class ObsilitiesPlugin extends Plugin {
 	}
 
 	private getDragTarget(e: DragEvent): HTMLElement | null {
-		const els = this.headerContainer?.querySelectorAll(
-			".obsilities-header-btn",
-		);
+		const els = this.headerContainer?.querySelectorAll(".obsilities-header-btn");
 		if (!els) return null;
 		for (const el of Array.from(els) as HTMLElement[]) {
 			const rect = el.getBoundingClientRect();
@@ -469,13 +438,18 @@ export default class ObsilitiesPlugin extends Plugin {
 	}
 
 	private getButtonKey(btn: Element): string {
+		const icon = this.getButtonIcon(btn);
+		const label = btn.getAttribute("aria-label") ?? "";
+		return icon || label ? `${icon}|${label}` : "";
+	}
+
+	private getButtonIcon(btn: Element): string {
 		const svg = btn.querySelector("svg");
-		if (svg) {
-			for (const cls of Array.from(svg.classList)) {
-				if (cls.startsWith("lucide-")) return cls;
-			}
+		if (!svg) return "";
+		for (const cls of Array.from(svg.classList)) {
+			if (cls.startsWith("lucide-")) return cls;
 		}
-		return btn.getAttribute("aria-label") || "";
+		return "";
 	}
 
 	private sortButtonsByOrder(buttons: HTMLElement[]): void {
@@ -492,33 +466,31 @@ export default class ObsilitiesPlugin extends Plugin {
 	}
 
 	private saveButtonOrder(): void {
-		const buttons = this.headerContainer?.querySelectorAll(
-			".obsilities-header-btn",
-		);
+		const buttons = this.headerContainer?.querySelectorAll(".obsilities-header-btn");
 		if (!buttons) return;
-		this.settings.headerButtonOrder = Array.from(buttons).map((btn) =>
-			this.getButtonKey(btn),
-		);
+		this.settings.headerButtonOrder = Array.from(buttons)
+			.map((btn) => this.getButtonKey(btn))
+			.filter((key) => key !== "");
 		void this.saveSettings();
 	}
 
 	private showButtonToggleMenu(e: MouseEvent): void {
 		e.preventDefault();
 		const menu = new Menu();
-		const buttons = this.headerContainer?.querySelectorAll(
-			".obsilities-header-btn",
-		);
+		const buttons = this.headerContainer?.querySelectorAll(".obsilities-header-btn");
 		if (!buttons?.length) return;
 
 		for (const btn of Array.from(buttons)) {
 			const key = this.getButtonKey(btn);
+			if (!key) continue;
 			const label = btn.getAttribute("aria-label") || "Unknown";
 			const isHidden = this.settings.hiddenHeaderButtons[key] ?? false;
 			menu.addItem((item) => {
 				item.setTitle(label)
 					.setChecked(!isHidden)
 					.onClick(async () => {
-						this.settings.hiddenHeaderButtons[key] = !isHidden;
+						if (isHidden) delete this.settings.hiddenHeaderButtons[key];
+						else this.settings.hiddenHeaderButtons[key] = true;
 						await this.saveSettings();
 						this.applyButtonVisibility();
 					});
@@ -529,13 +501,13 @@ export default class ObsilitiesPlugin extends Plugin {
 	}
 
 	applyButtonVisibility(): void {
-		const buttons = this.headerContainer?.querySelectorAll(
-			".obsilities-header-btn",
-		);
+		const buttons = this.headerContainer?.querySelectorAll(".obsilities-header-btn");
 		if (!buttons) return;
 		for (const btn of Array.from(buttons)) {
 			const key = this.getButtonKey(btn);
-			const isHidden = this.settings.hiddenHeaderButtons[key] ?? false;
+			const isHidden = key
+				? this.settings.hiddenHeaderButtons[key] === true
+				: false;
 			btn.classList.toggle("obsilities-button-hidden", isHidden);
 		}
 	}
@@ -545,17 +517,13 @@ export default class ObsilitiesPlugin extends Plugin {
 
 		const headerWidth = this.headerContainer.getBoundingClientRect().width;
 
-		const isSidebarOpen = document.querySelector(
-			".workspace.is-left-sidedock-open",
-		);
+		const isSidebarOpen = document.querySelector(".workspace.is-left-sidedock-open");
 
 		if (isSidebarOpen) {
 			const leftSplit = document.querySelector(
 				".mod-left-split",
 			) as HTMLElement | null;
-			const splitWidth = leftSplit
-				? parseFloat(leftSplit.style.width) || 0
-				: 0;
+			const splitWidth = leftSplit ? parseFloat(leftSplit.style.width) || 0 : 0;
 			const rootExtra = Math.max(0, headerWidth - splitWidth);
 			document.documentElement.style.setProperty(
 				"--obsilities-root-extra",
@@ -593,27 +561,6 @@ export default class ObsilitiesPlugin extends Plugin {
 		this.headerContainer?.remove();
 		this.headerContainer = null;
 		this.sidebarTabsContainer = null;
-		document.documentElement.style.removeProperty(
-			"--obsilities-root-extra",
-		);
-	}
-
-	private openGraphIfEmpty(): void {
-		if (!Platform.isDesktopApp) return;
-		if (!this.settings.defaultGraphView) return;
-
-		const rootLeaves: WorkspaceLeaf[] = [];
-		this.app.workspace.iterateRootLeaves((leaf) => {
-			rootLeaves.push(leaf);
-		});
-		if (rootLeaves.length === 0) return;
-
-		const allEmpty = rootLeaves.every(
-			(leaf) => leaf.view?.getViewType() === "empty",
-		);
-		if (!allEmpty) return;
-
-		const first = rootLeaves[0];
-		if (first) void first.setViewState({ type: "graph", active: true });
+		document.documentElement.style.removeProperty("--obsilities-root-extra");
 	}
 }

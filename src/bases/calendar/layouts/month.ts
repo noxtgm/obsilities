@@ -1,18 +1,10 @@
 import { setIcon } from "obsidian";
+import { fromLocalISODate, monthGrid, sameDay, toLocalISODate } from "../dates";
+import type { CalendarEvent, CalendarLayoutRenderer, LayoutContext } from "../types";
 import {
-	formatTime,
-	fromLocalISODate,
-	monthGrid,
-	sameDay,
-	toLocalISODate,
-} from "../dates";
-import type {
-	CalendarEvent,
-	CalendarLayoutRenderer,
-	LayoutContext,
-} from "../types";
-import {
+	DragDecorations,
 	attachChipInteractions,
+	buildChip,
 	groupByDay,
 	renderDaySpanPreview,
 	shiftEventStart,
@@ -24,8 +16,7 @@ const MAX_CHIPS = 4;
 
 export class MonthLayout implements CalendarLayoutRenderer {
 	private root: HTMLElement;
-	private previewEls: HTMLElement[] = [];
-	private dropTarget: HTMLElement | null = null;
+	private decorations = new DragDecorations();
 
 	constructor(container: HTMLElement) {
 		this.root = container.createDiv({ cls: "obsilities-calendar-month" });
@@ -73,20 +64,22 @@ export class MonthLayout implements CalendarLayoutRenderer {
 			e.stopPropagation();
 			ctx.callbacks.viewDay(day);
 		});
-		const addBtn = dayHeader.createDiv({
-			cls: "obsilities-calendar-day-add",
-			attr: { "aria-label": "New event on this day" },
-		});
-		setIcon(addBtn, "plus");
-		addBtn.addEventListener("click", (e) => {
-			e.stopPropagation();
-			ctx.callbacks.create(day);
-		});
+		if (ctx.creatable) {
+			const addBtn = dayHeader.createDiv({
+				cls: "obsilities-calendar-day-add",
+				attr: { "aria-label": "New event on this day" },
+			});
+			setIcon(addBtn, "plus");
+			addBtn.addEventListener("click", (e) => {
+				e.stopPropagation();
+				ctx.callbacks.create(day);
+			});
+		}
 
 		const body = cell.createDiv({ cls: "obsilities-calendar-day-events" });
 		const dayEvents = (byDay.get(iso) ?? []).slice().sort(sortEvents);
 		for (const event of dayEvents.slice(0, MAX_CHIPS)) {
-			this.buildChip(body, event, ctx, day);
+			this.buildEventChip(body, event, ctx, day);
 		}
 		if (dayEvents.length > MAX_CHIPS) {
 			const more = body.createDiv({
@@ -100,34 +93,19 @@ export class MonthLayout implements CalendarLayoutRenderer {
 		}
 	}
 
-	private buildChip(
+	private buildEventChip(
 		body: HTMLElement,
 		event: CalendarEvent,
 		ctx: LayoutContext,
 		day: Date,
 	): void {
-		const chip = body.createDiv({
-			cls: "obsilities-calendar-chip",
-			attr: { "data-event-id": event.id },
+		const chip = buildChip(event, {
+			allDay: event.allDay,
+			isStart: sameDay(event.start, day),
 		});
-		if (event.allDay) chip.addClass("is-allday");
-		else if (sameDay(event.start, day)) {
-			chip.createSpan({
-				cls: "obsilities-calendar-chip-time",
-				text: formatTime(event.start),
-			});
-		}
-		chip.createSpan({
-			cls: "obsilities-calendar-chip-title",
-			text: event.title,
-		});
+		body.appendChild(chip);
 
-		attachChipInteractions(
-			chip,
-			event,
-			ctx,
-			this.makeDragSpec(event, ctx, day),
-		);
+		attachChipInteractions(chip, event, ctx, this.makeDragSpec(event, ctx, day));
 	}
 
 	private makeDragSpec(
@@ -137,52 +115,39 @@ export class MonthLayout implements CalendarLayoutRenderer {
 	): DragSpec {
 		return {
 			onMove: (x, y) => {
-				const cell = this.cellAt(x, y);
-				const day = cell && fromLocalISODate(cell.dataset.date ?? "");
-				if (!day) return;
-				this.setDropTarget(cell);
-				this.showPreview(grabDay, day, event);
+				const at = this.dayAt(x, y);
+				if (!at) return;
+				this.decorations.setDropTarget(at.cell);
+				this.showPreview(grabDay, at.day, event);
 			},
 			onDrop: (x, y) => {
-				const cell = this.cellAt(x, y);
-				const day = cell && fromLocalISODate(cell.dataset.date ?? "");
-				if (!day) return false;
-				const start = shiftEventStart(event, grabDay, day);
+				const at = this.dayAt(x, y);
+				if (!at) return false;
+				const start = shiftEventStart(event, grabDay, at.day);
 				if (start.getTime() === event.start.getTime()) return false;
 				ctx.callbacks.reschedule(event, start, event.allDay);
 				return true;
 			},
 			onEnd: () => {
-				this.clearPreview();
-				this.setDropTarget(null);
+				this.decorations.clearPreview();
+				this.decorations.setDropTarget(null);
 			},
 		};
 	}
 
-	private cellAt(x: number, y: number): HTMLElement | null {
+	private dayAt(x: number, y: number): { cell: HTMLElement; day: Date } | null {
 		const el = this.root.doc.elementFromPoint(x, y);
-		return el ? el.closest<HTMLElement>(".obsilities-calendar-day") : null;
+		const cell = el?.closest<HTMLElement>(".obsilities-calendar-day");
+		if (!cell) return null;
+		const day = fromLocalISODate(cell.dataset.date ?? "");
+		return day ? { cell, day } : null;
 	}
 
-	private setDropTarget(cell: HTMLElement | null): void {
-		if (this.dropTarget === cell) return;
-		this.dropTarget?.removeClass("is-drop-target");
-		this.dropTarget = cell;
-		cell?.addClass("is-drop-target");
-	}
-
-	private showPreview(
-		grabDay: Date,
-		targetDay: Date,
-		event: CalendarEvent,
-	): void {
-		this.clearPreview();
-		this.previewEls = renderDaySpanPreview(
-			event,
-			grabDay,
-			targetDay,
-			event.allDay,
-			(iso) => this.dayBody(iso),
+	private showPreview(grabDay: Date, targetDay: Date, event: CalendarEvent): void {
+		this.decorations.setPreview(
+			renderDaySpanPreview(event, grabDay, targetDay, event.allDay, (iso) =>
+				this.dayBody(iso),
+			),
 		);
 	}
 
@@ -190,10 +155,5 @@ export class MonthLayout implements CalendarLayoutRenderer {
 		return this.root.querySelector<HTMLElement>(
 			`.obsilities-calendar-day[data-date="${iso}"] .obsilities-calendar-day-events`,
 		);
-	}
-
-	private clearPreview(): void {
-		for (const el of this.previewEls) el.remove();
-		this.previewEls = [];
 	}
 }

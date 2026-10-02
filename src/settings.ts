@@ -26,7 +26,7 @@ export class ObsilitiesSettingTab extends PluginSettingTab {
 		new Setting(settingsList)
 			.setName("Readable line length")
 			.setDesc(
-				"Width of the text column, in pixels. Only applies when 'Readable line length' is enabled in Obsidian's Appearance settings.",
+				"Width of the text column. Only applies when Obsidian's 'Readable line length' is enabled in Appearance settings.",
 			)
 			.addSlider((slider) =>
 				slider
@@ -100,9 +100,7 @@ export class ObsilitiesSettingTab extends PluginSettingTab {
 
 		new Setting(settingsList)
 			.setName("Hide properties header")
-			.setDesc(
-				"Hide the properties heading shown above a note's frontmatter.",
-			)
+			.setDesc("Hide the properties heading shown above a note's frontmatter.")
 			.addToggle((toggle) =>
 				toggle
 					.setValue(this.plugin.settings.hidePropertiesHeader)
@@ -115,9 +113,7 @@ export class ObsilitiesSettingTab extends PluginSettingTab {
 
 		new Setting(settingsList)
 			.setName("Hide external link icons")
-			.setDesc(
-				"Hide the arrow icon shown next to external links in notes.",
-			)
+			.setDesc("Hide the arrow icon shown next to external links in notes.")
 			.addToggle((toggle) =>
 				toggle
 					.setValue(this.plugin.settings.hideExternalLinks)
@@ -171,20 +167,6 @@ export class ObsilitiesSettingTab extends PluginSettingTab {
 					}),
 			);
 
-		new Setting(settingsList)
-			.setName("Default graph view (Desktop)")
-			.setDesc(
-				"When all tabs are closed, automatically open the graph view instead of showing an empty pane.",
-			)
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.defaultGraphView)
-					.onChange(async (value) => {
-						this.plugin.settings.defaultGraphView = value;
-						await this.plugin.saveSettings();
-					}),
-			);
-
 		/* Typography settings */
 
 		new Setting(containerEl).setName("Typography").setHeading();
@@ -211,9 +193,7 @@ export class ObsilitiesSettingTab extends PluginSettingTab {
 		});
 		new Setting(skipEnDashEl)
 			.setName("Skip en-dash")
-			.setDesc(
-				"Two dashes will be converted to an em-dash instead of an en-dash.",
-			)
+			.setDesc("Two dashes will be converted to an em-dash instead of an en-dash.")
 			.addToggle((toggle) =>
 				toggle.setValue(st.skipEnDash).onChange(async (value) => {
 					st.skipEnDash = value;
@@ -224,9 +204,7 @@ export class ObsilitiesSettingTab extends PluginSettingTab {
 
 		new Setting(stList)
 			.setName("Ellipsis")
-			.setDesc(
-				"Three periods (...) will be converted to an ellipsis (…).",
-			)
+			.setDesc("Three periods (...) will be converted to an ellipsis (…).")
 			.addToggle((toggle) =>
 				toggle.setValue(st.ellipsis).onChange(async (value) => {
 					st.ellipsis = value;
@@ -260,9 +238,7 @@ export class ObsilitiesSettingTab extends PluginSettingTab {
 
 		new Setting(stList)
 			.setName("Guillemets")
-			.setDesc(
-				"<< and >> will be converted to guillemet marks (« and »).",
-			)
+			.setDesc("<< and >> will be converted to guillemet marks (« and »).")
 			.addToggle((toggle) =>
 				toggle.setValue(st.guillemets).onChange(async (value) => {
 					st.guillemets = value;
@@ -293,9 +269,7 @@ export class ObsilitiesSettingTab extends PluginSettingTab {
 
 		new Setting(stList)
 			.setName("Arrows")
-			.setDesc(
-				"<- and -> will be converted to left and right arrows (← and →).",
-			)
+			.setDesc("<- and -> will be converted to left and right arrows (← and →).")
 			.addToggle((toggle) =>
 				toggle.setValue(st.arrows).onChange(async (value) => {
 					st.arrows = value;

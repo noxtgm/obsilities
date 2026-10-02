@@ -1,9 +1,5 @@
 import { monthFixedLeading, sameDay, toLocalISODate } from "../dates";
-import type {
-	CalendarEvent,
-	CalendarLayoutRenderer,
-	LayoutContext,
-} from "../types";
+import type { CalendarEvent, CalendarLayoutRenderer, LayoutContext } from "../types";
 import { groupByDay } from "./shared";
 
 export class YearLayout implements CalendarLayoutRenderer {
@@ -42,6 +38,9 @@ export class YearLayout implements CalendarLayoutRenderer {
 			cls: "obsilities-calendar-year-month-title",
 			text: monthDate.toLocaleDateString(undefined, { month: "long" }),
 		});
+		if (month === ctx.today.getMonth() && year === ctx.today.getFullYear()) {
+			title.addClass("is-current");
+		}
 		title.addEventListener("click", (e) => {
 			e.stopPropagation();
 			ctx.callbacks.viewMonth(monthDate);
