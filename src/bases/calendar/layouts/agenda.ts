@@ -59,7 +59,8 @@ export class AgendaLayout implements CalendarLayoutRenderer {
 		const group = this.root.createDiv({
 			cls: "obsilities-calendar-agenda-group",
 		});
-		const header = group.createDiv({
+		if (sameDay(day, ctx.today)) group.addClass("is-today");
+		group.createDiv({
 			cls: "obsilities-calendar-agenda-date",
 			text: day.toLocaleDateString(undefined, {
 				weekday: "long",
@@ -67,7 +68,6 @@ export class AgendaLayout implements CalendarLayoutRenderer {
 				day: "numeric",
 			}),
 		});
-		if (sameDay(day, ctx.today)) header.addClass("is-today");
 
 		const list = group.createDiv({
 			cls: "obsilities-calendar-agenda-list",

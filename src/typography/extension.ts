@@ -91,6 +91,7 @@ export function createSmartTypographyExtension(
 					return e.value as TransactionSpec | null;
 				}
 			}
+			if (tr.docChanged) return null;
 			if (
 				!oldVal ||
 				tr.isUserEvent("input") ||
@@ -154,12 +155,13 @@ export function createSmartTypographyExtension(
 
 			const applyRule = (
 				fromA: number,
+				toA: number,
 				fromB: number,
 				insertedText: string,
 			): boolean => {
 				const matchedRules = inputRuleMap[insertedText];
 				if (!matchedRules?.length) return false;
-				if (!canPerformReplacement(fromA)) return false;
+				if (!canPerformReplacement(fromB)) return false;
 
 				for (const rule of matchedRules) {
 					const contextLength = Math.max(3, rule.from.length);
@@ -175,7 +177,7 @@ export function createSmartTypographyExtension(
 
 					changes.push({
 						from: insertionPoint,
-						to: insertionPoint + replacementLength,
+						to: toA,
 						insert,
 					});
 					reverts.push({
@@ -192,9 +194,9 @@ export function createSmartTypographyExtension(
 				return false;
 			};
 
-			tr.changes.iterChanges((fromA, toA, fromB, toB, inserted) => {
+			tr.changes.iterChanges((fromA, toA, fromB, _toB, inserted) => {
 				const insertedText = inserted.sliceString(0, inserted.length);
-				if (applyRule(fromA, fromB, insertedText)) return;
+				if (applyRule(fromA, toA, fromB, insertedText)) return;
 				changes.push({ from: fromA, to: toA, insert: inserted });
 			});
 

@@ -64,7 +64,7 @@ export class MonthLayout implements CalendarLayoutRenderer {
 			e.stopPropagation();
 			ctx.callbacks.viewDay(day);
 		});
-		if (ctx.editable) {
+		if (ctx.creatable) {
 			const addBtn = dayHeader.createDiv({
 				cls: "obsilities-calendar-day-add",
 				attr: { "aria-label": "New event on this day" },

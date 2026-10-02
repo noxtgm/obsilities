@@ -6,7 +6,6 @@ import {
 	pickHiddenButtons,
 	pickKnownSettings,
 } from "./types";
-import { KANBAN_VIEW_TYPE, KanbanView } from "./bases/kanban/view";
 import { CALENDAR_VIEW_TYPE } from "./bases/calendar/types";
 import { CalendarView } from "./bases/calendar/view";
 import { ObsilitiesSettingTab } from "./settings";
@@ -42,7 +41,13 @@ export default class ObsilitiesPlugin extends Plugin {
 	async onload(): Promise<void> {
 		await this.loadSettings();
 
-		this.registerBasesViews();
+		this.registerBasesView(CALENDAR_VIEW_TYPE, {
+			name: "Calendar",
+			icon: "calendar",
+			factory: (controller, containerEl) =>
+				new CalendarView(controller, containerEl),
+			options: CalendarView.getViewOptions,
+		});
 
 		this.buildSmartTypographyRules();
 		this.registerEditorExtension(
@@ -90,23 +95,6 @@ export default class ObsilitiesPlugin extends Plugin {
 			"obsilities-file-icons",
 			"obsilities-folder-colors",
 		);
-	}
-
-	private registerBasesViews(): void {
-		this.registerBasesView(KANBAN_VIEW_TYPE, {
-			name: "Kanban",
-			icon: "square-kanban",
-			factory: (controller, containerEl) => new KanbanView(controller, containerEl),
-			options: KanbanView.getViewOptions,
-		});
-
-		this.registerBasesView(CALENDAR_VIEW_TYPE, {
-			name: "Calendar",
-			icon: "calendar",
-			factory: (controller, containerEl) =>
-				new CalendarView(controller, containerEl),
-			options: CalendarView.getViewOptions,
-		});
 	}
 
 	applyBodyClasses(): void {

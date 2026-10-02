@@ -205,7 +205,7 @@ export function attachChipInteractions(
 		ctx.callbacks.openBackground(event.path);
 	});
 
-	if (!ctx.editable) {
+	if (!ctx.editable || !event.editable) {
 		chip.addEventListener("click", (e) => {
 			ctx.callbacks.open(event.path, !!Keymap.isModEvent(e));
 		});

@@ -1,7 +1,9 @@
 import { DateValue, NullValue, parsePropertyId } from "obsidian";
 import type { App, BasesEntry, BasesPropertyId, Value } from "obsidian";
-import { isLocalMidnight, parseDateString } from "./dates";
-import type { CalendarEvent } from "./types";
+import { parseDateString } from "./dates";
+import { eventsForProperty } from "./occurrences";
+import { parseRule } from "./recurrence";
+import type { CalendarEvent, DateSource } from "./types";
 
 function readTitle(entry: BasesEntry, titleProp: BasesPropertyId | null): string {
 	if (titleProp) {
@@ -19,6 +21,21 @@ function readTitle(entry: BasesEntry, titleProp: BasesPropertyId | null): string
 }
 
 type ParsedPropertyId = ReturnType<typeof parsePropertyId>;
+
+function readEntryRaw(
+	entry: BasesEntry,
+	propId: BasesPropertyId,
+	parsed: ParsedPropertyId,
+	frontmatter: Record<string, unknown> | undefined,
+): unknown {
+	if (parsed.type === "note" && frontmatter) {
+		const raw = frontmatter[parsed.name];
+		if (raw != null) return raw;
+	}
+	const value = safeGetValue(entry, propId);
+	if (value === null || value instanceof NullValue) return null;
+	return value.toString();
+}
 
 function readEntryDate(
 	entry: BasesEntry,
@@ -74,47 +91,70 @@ interface EventBuildOptions {
 	app: App;
 	entries: BasesEntry[];
 	titleProp: BasesPropertyId | null;
-	dateProp: BasesPropertyId;
-	endProp: BasesPropertyId;
+	dateSources: DateSource[];
+	recurrenceProp: BasesPropertyId | null;
+	from: Date;
+	to: Date;
 }
 
 export function buildEvents(opts: EventBuildOptions): CalendarEvent[] {
 	const events: CalendarEvent[] = [];
-	const dateParsed = parsePropertyId(opts.dateProp);
-	const endParsed = parsePropertyId(opts.endProp);
-	const needsFrontmatter = dateParsed.type === "note" || endParsed.type === "note";
+	const sources = opts.dateSources.map((source) => ({
+		source,
+		startParsed: parsePropertyId(source.propId),
+		endParsed: source.endPropId ? parsePropertyId(source.endPropId) : null,
+	}));
+	const recurParsed = opts.recurrenceProp ? parsePropertyId(opts.recurrenceProp) : null;
+	const needsFrontmatter =
+		recurParsed?.type === "note" ||
+		sources.some(
+			({ startParsed, endParsed }) =>
+				startParsed.type === "note" || endParsed?.type === "note",
+		);
 
 	for (const entry of opts.entries) {
 		const frontmatter = needsFrontmatter
 			? opts.app.metadataCache.getFileCache(entry.file)?.frontmatter
 			: undefined;
 
-		const start = readEntryDate(entry, opts.dateProp, dateParsed, frontmatter);
-		if (!start) continue;
+		const rule =
+			opts.recurrenceProp && recurParsed
+				? parseRule(
+						readEntryRaw(
+							entry,
+							opts.recurrenceProp,
+							recurParsed,
+							frontmatter,
+						),
+					)
+				: null;
 
-		const rawEnd = readEntryDate(entry, opts.endProp, endParsed, frontmatter);
-
-		const allDay =
-			isLocalMidnight(start) && (rawEnd === null || isLocalMidnight(rawEnd));
-
-		let end: Date | null = null;
-		if (rawEnd) {
-			const usable = allDay
-				? rawEnd.getTime() >= start.getTime()
-				: rawEnd.getTime() > start.getTime();
-			if (usable) end = rawEnd;
-		}
-
+		const title = readTitle(entry, opts.titleProp);
 		const path = entry.file.path;
-		events.push({
-			id: path,
-			path,
-			title: readTitle(entry, opts.titleProp),
-			start,
-			end,
-			rawEnd,
-			allDay,
-		});
+
+		for (const { source, startParsed, endParsed } of sources) {
+			const start = readEntryDate(entry, source.propId, startParsed, frontmatter);
+			if (!start) continue;
+
+			const rawEnd =
+				source.endPropId && endParsed
+					? readEntryDate(entry, source.endPropId, endParsed, frontmatter)
+					: null;
+
+			events.push(
+				...eventsForProperty({
+					path,
+					title,
+					source: source.propId,
+					endSource: source.endPropId,
+					start,
+					rawEnd,
+					rule,
+					from: opts.from,
+					to: opts.to,
+				}),
+			);
+		}
 	}
 
 	return events;

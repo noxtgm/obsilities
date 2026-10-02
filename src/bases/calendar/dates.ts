@@ -1,5 +1,4 @@
-// Pure date utilities for the calendar
-// All calculations are in local time (no external deps)
+export const DAY_MINUTES = 24 * 60;
 
 function pad2(n: number): string {
 	return n < 10 ? `0${n}` : `${n}`;
@@ -19,6 +18,10 @@ export function startOfDay(date: Date): Date {
 	const d = new Date(date);
 	d.setHours(0, 0, 0, 0);
 	return d;
+}
+
+export function startOfNextDay(date: Date): Date {
+	return startOfDay(addDays(date, 1));
 }
 
 export function startOfMonth(date: Date): Date {
@@ -75,6 +78,36 @@ export function minutesSinceMidnight(date: Date): number {
 	return date.getHours() * 60 + date.getMinutes();
 }
 
+function minutesIntoDay(time: number, dayStart: number, nextDayStart: number): number {
+	if (time <= dayStart) return 0;
+	if (time >= nextDayStart) return DAY_MINUTES;
+	return minutesSinceMidnight(new Date(time));
+}
+
+export function spanMinutesIntoDay(
+	start: number,
+	end: number,
+	dayStart: number,
+	nextDayStart: number,
+): { startMin: number; endMin: number } | null {
+	if (end <= dayStart || start >= nextDayStart) return null;
+	const from = Math.max(start, dayStart);
+	const to = Math.min(end, nextDayStart);
+	const startMin = minutesIntoDay(from, dayStart, nextDayStart);
+	const wallEnd = minutesIntoDay(to, dayStart, nextDayStart);
+	return { startMin, endMin: Math.max(wallEnd, startMin + (to - from) / 60000) };
+}
+
+export function atMinutes(day: Date, minutes: number): Date {
+	const d = startOfDay(day);
+	d.setMinutes(minutes);
+	return d;
+}
+
+export function sameMinute(a: Date, b: Date): boolean {
+	return Math.floor(a.getTime() / 60000) === Math.floor(b.getTime() / 60000);
+}
+
 export function toLocalISODate(date: Date): string {
 	return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
 }
@@ -93,13 +126,26 @@ export function toLocalISODateTime(date: Date): string {
 	return `${toLocalISODate(date)}T${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
 }
 
+function localDate(
+	year: number,
+	month: number,
+	day: number,
+	hours = 0,
+	minutes = 0,
+	seconds = 0,
+): Date {
+	const date = new Date(year, month, day, hours, minutes, seconds);
+	date.setFullYear(year);
+	return date;
+}
+
 export function parseDateString(input: string): Date | null {
 	const s = input.trim();
 	if (!s) return null;
 
 	const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
 	if (dateOnly) {
-		return new Date(
+		return localDate(
 			Number(dateOnly[1]),
 			Number(dateOnly[2]) - 1,
 			Number(dateOnly[3]),
@@ -108,7 +154,7 @@ export function parseDateString(input: string): Date | null {
 
 	const localDT = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?$/.exec(s);
 	if (localDT) {
-		return new Date(
+		return localDate(
 			Number(localDT[1]),
 			Number(localDT[2]) - 1,
 			Number(localDT[3]),

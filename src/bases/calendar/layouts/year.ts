@@ -38,6 +38,9 @@ export class YearLayout implements CalendarLayoutRenderer {
 			cls: "obsilities-calendar-year-month-title",
 			text: monthDate.toLocaleDateString(undefined, { month: "long" }),
 		});
+		if (month === ctx.today.getMonth() && year === ctx.today.getFullYear()) {
+			title.addClass("is-current");
+		}
 		title.addEventListener("click", (e) => {
 			e.stopPropagation();
 			ctx.callbacks.viewMonth(monthDate);

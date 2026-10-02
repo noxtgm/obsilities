@@ -1,34 +1,75 @@
 import { BasesView, TFile, debounce, setIcon } from "obsidian";
-import type { BasesOptions, BasesPropertyId, QueryController } from "obsidian";
+import type {
+	BasesAllOptions,
+	BasesOptions,
+	BasesPropertyId,
+	BasesViewConfig,
+	QueryController,
+} from "obsidian";
 import {
 	addDays,
 	addMinutes,
 	addMonths,
 	addYears,
+	endOfMonth,
+	monthGrid,
+	startOfNextDay,
 	formatMonthSpan,
 	formatMonthTitle,
 	formatWeekTitle,
+	sameDay,
 	startOfDay,
 	startOfMonth,
+	startOfWeek,
 	weekSuffix,
 } from "./dates";
-import { openFileInBackground } from "../workspace";
 import { buildEvents } from "./events";
 import { AgendaLayout } from "./layouts/agenda";
 import { MonthLayout } from "./layouts/month";
 import { allDayDropEnd } from "./layouts/shared";
 import { TimeGridLayout } from "./layouts/timegrid";
 import { YearLayout } from "./layouts/year";
-import { CALENDAR_LAYOUTS, CALENDAR_VIEW_TYPE, CONFIG, LAYOUT_LABELS } from "./types";
+import {
+	CALENDAR_LAYOUTS,
+	CALENDAR_VIEW_TYPE,
+	CONFIG,
+	LAYOUT_LABELS,
+	LAYOUT_LADDER,
+	datePropertyKey,
+} from "./types";
 import type {
 	CalendarCallbacks,
 	CalendarEvent,
 	CalendarLayout,
 	CalendarLayoutRenderer,
+	DateSource,
 	LayoutContext,
 } from "./types";
 import { dateFrontmatterSetter, isWritableProperty, writeDates } from "./writes";
 import type { DateWrite } from "./writes";
+
+const EMPTY_SLOT_RUN = 10;
+
+const ACCENT_COLOR = "accent";
+const NOW_COLORS: Record<string, string> = {
+	[ACCENT_COLOR]: "var(--interactive-accent)",
+	red: "var(--color-red)",
+	orange: "var(--color-orange)",
+	yellow: "var(--color-yellow)",
+	green: "var(--color-green)",
+	cyan: "var(--color-cyan)",
+	blue: "var(--color-blue)",
+	purple: "var(--color-purple)",
+	pink: "var(--color-pink)",
+};
+const NOW_COLOR_LABELS: Record<string, string> = Object.fromEntries(
+	Object.keys(NOW_COLORS).map((name) => [
+		name,
+		name === ACCENT_COLOR
+			? "Obsidian accent"
+			: name.charAt(0).toUpperCase() + name.slice(1),
+	]),
+);
 
 export class CalendarView extends BasesView {
 	type = CALENDAR_VIEW_TYPE;
@@ -54,8 +95,10 @@ export class CalendarView extends BasesView {
 	private focusEventId: string | null = null;
 
 	private titleProp: BasesPropertyId | null = null;
-	private dateProp: BasesPropertyId | null = null;
+	private dateSources: DateSource[] = [];
+	private primaryProp: BasesPropertyId | null = null;
 	private endProp: BasesPropertyId | null = null;
+	private recurrenceProp: BasesPropertyId | null = null;
 
 	private readonly rerender = debounce(() => this.render(), 50, true);
 
@@ -147,6 +190,7 @@ export class CalendarView extends BasesView {
 		const el = this.toolbarTitleEl;
 		if (!el) return;
 		el.empty();
+		const months = this.titleMonths();
 		for (const part of this.titleText().split(/(\d{4}|\(W\d+(?:-W\d+)?\))/)) {
 			if (!part) continue;
 			if (/^\d{4}$/.test(part)) {
@@ -154,9 +198,59 @@ export class CalendarView extends BasesView {
 			} else if (part.startsWith("(W")) {
 				this.appendWeekPart(el, part);
 			} else {
-				el.appendText(part);
+				this.appendMonthPart(el, part, months);
 			}
 		}
+	}
+
+	private titleMonths(): Date[] {
+		if (this.layout === "year") return [];
+		const [start, end] = this.titleSpan();
+		const first = startOfMonth(start);
+		const last = startOfMonth(end);
+		return first.getTime() === last.getTime() ? [first] : [first, last];
+	}
+
+	private titleSpan(): [Date, Date] {
+		if (this.isDaySpanLayout()) return this.daySpan();
+		if (this.layout === "week") {
+			const start = startOfWeek(this.anchor, this.weekStart);
+			return [start, addDays(start, 6)];
+		}
+		return [this.anchor, this.anchor];
+	}
+
+	private appendMonthPart(el: HTMLElement, part: string, months: Date[]): void {
+		part.split(" - ").forEach((chunk, index) => {
+			if (index > 0) el.appendText(" - ");
+			const label = chunk.trim();
+			if (!label) {
+				el.appendText(chunk);
+				return;
+			}
+			const offset = chunk.indexOf(label);
+			if (offset > 0) el.appendText(chunk.slice(0, offset));
+			this.appendMonthLabel(el, label, months.shift());
+			el.appendText(chunk.slice(offset + label.length));
+		});
+	}
+
+	private appendMonthLabel(el: HTMLElement, label: string, month?: Date): void {
+		const span = el.createSpan({
+			cls: "obsilities-calendar-title-month",
+			text: label,
+		});
+		if (this.layout === "month") {
+			span.toggleClass("is-current", this.showsToday(new Date()));
+			return;
+		}
+		if (!month) return;
+		span.addClass("is-clickable");
+		span.setAttribute("aria-label", "Show this month");
+		span.addEventListener("click", (e) => {
+			e.stopPropagation();
+			this.goToMonth(month);
+		});
 	}
 
 	private appendYearPart(el: HTMLElement, part: string): void {
@@ -164,7 +258,10 @@ export class CalendarView extends BasesView {
 			cls: "obsilities-calendar-title-year",
 			text: part,
 		});
-		if (this.layout === "year") return;
+		if (this.layout === "year") {
+			span.toggleClass("is-current", this.showsToday(new Date()));
+			return;
+		}
 		span.addClass("is-clickable");
 		span.setAttribute("aria-label", "Show this year");
 		const year = Number(part);
@@ -183,7 +280,14 @@ export class CalendarView extends BasesView {
 				if (index > 0) el.appendText("-W");
 				const target = targets[index];
 				if (!target) {
-					el.appendText(number);
+					if (this.layout === "week" && this.showsToday(new Date())) {
+						el.createSpan({
+							cls: "obsilities-calendar-title-week is-current",
+							text: number,
+						});
+					} else {
+						el.appendText(number);
+					}
 					return;
 				}
 				const span = el.createSpan({
@@ -202,6 +306,12 @@ export class CalendarView extends BasesView {
 	private goToWeek(date: Date): void {
 		this.layout = "week";
 		this.anchor = startOfDay(date);
+		this.render();
+	}
+
+	private goToMonth(date: Date): void {
+		this.layout = "month";
+		this.anchor = startOfMonth(date);
 		this.render();
 	}
 
@@ -259,8 +369,39 @@ export class CalendarView extends BasesView {
 	}
 
 	private goToday(): void {
-		this.anchor = startOfDay(new Date());
+		const today = startOfDay(new Date());
+		if (this.showsToday(today)) {
+			const next = this.nextLayout();
+			if (!next) return;
+			this.layout = next;
+		}
+		this.anchor = today;
 		this.render();
+	}
+
+	private showsToday(today: Date): boolean {
+		switch (this.layout) {
+			case "year":
+				return this.anchor.getFullYear() === today.getFullYear();
+			case "month":
+			case "agenda":
+				return (
+					startOfMonth(this.anchor).getTime() === startOfMonth(today).getTime()
+				);
+			case "week":
+				return (
+					startOfWeek(this.anchor, this.weekStart).getTime() ===
+					startOfWeek(today, this.weekStart).getTime()
+				);
+			default:
+				return sameDay(this.anchor, today);
+		}
+	}
+
+	private nextLayout(): CalendarLayout | null {
+		const rung = LAYOUT_LADDER.indexOf(this.layout);
+		if (rung < 0) return null;
+		return LAYOUT_LADDER[rung + 1] ?? null;
 	}
 
 	private setLayout(layout: CalendarLayout): void {
@@ -274,6 +415,15 @@ export class CalendarView extends BasesView {
 		this.stateInitialized = true;
 
 		this.layout = this.coerceLayout(this.config.get(CONFIG.defaultLayout)) ?? "month";
+	}
+
+	private applyNowColor(): void {
+		const raw = this.config.get(CONFIG.nowColor);
+		this.containerEl.style.setProperty(
+			"--obsilities-cal-now",
+			(typeof raw === "string" ? NOW_COLORS[raw] : null) ??
+				"var(--interactive-accent)",
+		);
 	}
 
 	private coerceLayout(value: unknown): CalendarLayout | null {
@@ -305,18 +455,17 @@ export class CalendarView extends BasesView {
 		}
 		this.renderPending = false;
 		this.initStateFromConfig();
+		this.applyNowColor();
 
 		this.titleProp = this.config.getAsPropertyId(CONFIG.titleProperty);
-		this.dateProp = this.config.getAsPropertyId(CONFIG.dateProperty);
-		if (!this.dateProp) {
+		this.primaryProp = this.config.getAsPropertyId(datePropertyKey(0));
+		this.endProp = this.config.getAsPropertyId(CONFIG.endDateProperty);
+		this.dateSources = readDateSources(this.config);
+		if (this.dateSources.length === 0) {
 			this.showEmpty("Choose a date property in the view options (⚙︎).");
 			return;
 		}
-		this.endProp = this.config.getAsPropertyId(CONFIG.endDateProperty);
-		if (!this.endProp) {
-			this.showEmpty("Choose an end date property in the view options (⚙︎).");
-			return;
-		}
+		this.recurrenceProp = this.config.getAsPropertyId(CONFIG.recurrenceProperty);
 		this.weekStart = this.readNumberConfig(CONFIG.weekStart, 1, 0, 6);
 		this.defaultDurationMinutes = this.readNumberConfig(
 			CONFIG.defaultDuration,
@@ -325,12 +474,15 @@ export class CalendarView extends BasesView {
 			Number.MAX_SAFE_INTEGER,
 		);
 
+		const [from, to] = this.visibleRange();
 		const events = buildEvents({
 			app: this.app,
 			entries: this.data?.data ?? [],
 			titleProp: this.titleProp,
-			dateProp: this.dateProp,
-			endProp: this.endProp,
+			dateSources: this.dateSources,
+			recurrenceProp: this.recurrenceProp,
+			from,
+			to,
 		});
 
 		this.ensureRenderer();
@@ -342,8 +494,8 @@ export class CalendarView extends BasesView {
 			weekStart: this.weekStart,
 			defaultDurationMinutes: this.defaultDurationMinutes,
 			today: new Date(),
-			editable:
-				isWritableProperty(this.dateProp) && isWritableProperty(this.endProp),
+			editable: this.canEdit(),
+			creatable: this.canCreate(),
 			focusEventId: this.focusEventId,
 			callbacks: this.callbacks(),
 		};
@@ -353,6 +505,52 @@ export class CalendarView extends BasesView {
 			console.error("obsilities-calendar: render failed", error);
 		}
 		this.focusEventId = null;
+	}
+
+	private visibleRange(): [Date, Date] {
+		const endOf = (day: Date): Date => new Date(startOfNextDay(day).getTime() - 1);
+
+		switch (this.layout) {
+			case "year": {
+				const year = this.anchor.getFullYear();
+				return [new Date(year, 0, 1), endOf(new Date(year, 11, 31))];
+			}
+			case "month": {
+				const days = monthGrid(this.anchor, this.weekStart);
+				const first = days[0] ?? startOfMonth(this.anchor);
+				const last = days[days.length - 1] ?? endOfMonth(this.anchor);
+				return [startOfDay(first), endOf(last)];
+			}
+			case "week": {
+				const start = startOfWeek(this.anchor, this.weekStart);
+				return [start, endOf(addDays(start, 6))];
+			}
+			case "3days": {
+				const start = startOfDay(this.anchor);
+				return [start, endOf(addDays(start, 2))];
+			}
+			case "agenda": {
+				const start = new Date(
+					Math.max(
+						startOfDay(this.anchor).getTime(),
+						startOfDay(new Date()).getTime(),
+					),
+				);
+				return [start, endOfMonth(this.anchor)];
+			}
+			default: {
+				const start = startOfDay(this.anchor);
+				return [start, endOf(start)];
+			}
+		}
+	}
+
+	private canEdit(): boolean {
+		return this.dateSources.some((source) => isWritableProperty(source.propId));
+	}
+
+	private canCreate(): boolean {
+		return this.primaryProp !== null && isWritableProperty(this.primaryProp);
 	}
 
 	private showEmpty(message: string): void {
@@ -399,7 +597,13 @@ export class CalendarView extends BasesView {
 			},
 			openBackground: (path) => {
 				const file = this.fileForPath(path);
-				if (file) openFileInBackground(this.app, file);
+				if (!file) return;
+				const previous = this.app.workspace.getMostRecentLeaf();
+				const leaf = this.app.workspace.getLeaf("tab");
+				void leaf.openFile(file, { active: false });
+				if (previous && previous !== leaf) {
+					this.app.workspace.setActiveLeaf(previous, { focus: false });
+				}
 			},
 			reschedule: (event, start, allDay) => {
 				void this.reschedule(event, start, allDay);
@@ -438,17 +642,18 @@ export class CalendarView extends BasesView {
 		start: Date,
 		allDay: boolean,
 	): Promise<void> {
-		if (!this.dateProp || !isWritableProperty(this.dateProp)) return;
+		if (!event.editable) return;
+		if (!isWritableProperty(event.source)) return;
 		const file = this.fileForPath(event.path);
 		if (!file) return;
 
 		const snap = (date: Date): Date => (allDay ? startOfDay(date) : date);
 
-		const writes: DateWrite[] = [{ propId: this.dateProp, date: snap(start) }];
-		if (this.endProp && isWritableProperty(this.endProp)) {
+		const writes: DateWrite[] = [{ propId: event.source, date: snap(start) }];
+		if (event.endSource && isWritableProperty(event.endSource)) {
 			const end = this.rescheduledEnd(event, start, allDay);
 			if (end) {
-				writes.push({ propId: this.endProp, date: snap(end) });
+				writes.push({ propId: event.endSource, date: snap(end) });
 			}
 		}
 
@@ -479,15 +684,16 @@ export class CalendarView extends BasesView {
 	}
 
 	private async resize(event: CalendarEvent, start: Date, end: Date): Promise<void> {
+		if (!event.editable) return;
 		const file = this.fileForPath(event.path);
 		if (!file) return;
 
 		const writes: DateWrite[] = [];
-		if (this.dateProp && isWritableProperty(this.dateProp)) {
-			writes.push({ propId: this.dateProp, date: start });
+		if (isWritableProperty(event.source)) {
+			writes.push({ propId: event.source, date: start });
 		}
-		if (this.endProp && isWritableProperty(this.endProp)) {
-			writes.push({ propId: this.endProp, date: end });
+		if (event.endSource && isWritableProperty(event.endSource)) {
+			writes.push({ propId: event.endSource, date: end });
 		}
 		if (writes.length === 0) {
 			this.render();
@@ -503,9 +709,10 @@ export class CalendarView extends BasesView {
 	}
 
 	private async create(day: Date): Promise<void> {
-		if (!this.dateProp || !isWritableProperty(this.dateProp)) return;
+		const primary = this.primaryProp;
+		if (!primary || !isWritableProperty(primary)) return;
 		const start = startOfDay(day);
-		const writes: DateWrite[] = [{ propId: this.dateProp, date: start }];
+		const writes: DateWrite[] = [{ propId: primary, date: start }];
 		if (this.endProp && isWritableProperty(this.endProp)) {
 			writes.push({ propId: this.endProp, date: start });
 		}
@@ -516,9 +723,31 @@ export class CalendarView extends BasesView {
 		}
 	}
 
-	static getViewOptions(this: void): BasesOptions[] {
+	static getViewOptions(this: void, config: BasesViewConfig): BasesAllOptions[] {
 		const dateFilter = (prop: BasesPropertyId): boolean =>
 			prop.startsWith("note.") || prop.startsWith("file.");
+
+		const dateSlots: BasesOptions[] = [];
+		const configured = scanDateSlots(config).length;
+		for (let slot = 0; slot <= configured; slot++) {
+			dateSlots.push({
+				displayName: slot === 0 ? "Start date property" : `Date property ${slot}`,
+				type: "property",
+				key: datePropertyKey(slot),
+				placeholder: "Select a date&time property",
+				filter: dateFilter,
+			});
+			if (slot === 0) {
+				dateSlots.push({
+					displayName: "End date property",
+					type: "property",
+					key: CONFIG.endDateProperty,
+					placeholder: "Select a date&time property",
+					filter: dateFilter,
+				});
+			}
+		}
+
 		return [
 			{
 				displayName: "Event title",
@@ -526,19 +755,12 @@ export class CalendarView extends BasesView {
 				key: CONFIG.titleProperty,
 				placeholder: "Default: file name",
 			},
+			...dateSlots,
 			{
-				displayName: "Start date property",
+				displayName: "Recurrency property",
 				type: "property",
-				key: CONFIG.dateProperty,
-				placeholder: "Select a date&time property",
-				filter: dateFilter,
-			},
-			{
-				displayName: "End date property",
-				type: "property",
-				key: CONFIG.endDateProperty,
-				placeholder: "Select a date&time property",
-				filter: dateFilter,
+				key: CONFIG.recurrenceProperty,
+				placeholder: "Optional: daily, weekly, yearly…",
 			},
 			{
 				displayName: "First day of the week",
@@ -568,6 +790,37 @@ export class CalendarView extends BasesView {
 					"120": "2 hours",
 				},
 			},
+			{
+				displayName: "Today highlight color",
+				type: "dropdown",
+				key: CONFIG.nowColor,
+				default: ACCENT_COLOR,
+				options: NOW_COLOR_LABELS,
+			},
 		];
 	}
+}
+
+function scanDateSlots(config: BasesViewConfig): (BasesPropertyId | null)[] {
+	const slots: (BasesPropertyId | null)[] = [];
+	let empties = 0;
+	for (let slot = 0; empties < EMPTY_SLOT_RUN; slot++) {
+		const prop = config.getAsPropertyId(datePropertyKey(slot));
+		empties = prop ? 0 : empties + 1;
+		slots.push(prop);
+	}
+	while (slots.length > 0 && !slots[slots.length - 1]) slots.pop();
+	return slots;
+}
+
+function readDateSources(config: BasesViewConfig): DateSource[] {
+	const endPropId = config.getAsPropertyId(CONFIG.endDateProperty);
+	const sources: DateSource[] = [];
+	const seen: BasesPropertyId[] = [];
+	scanDateSlots(config).forEach((propId, slot) => {
+		if (!propId || seen.includes(propId)) return;
+		seen.push(propId);
+		sources.push({ propId, endPropId: slot === 0 ? endPropId : null });
+	});
+	return sources;
 }

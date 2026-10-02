@@ -1,12 +1,17 @@
 import {
+	DAY_MINUTES,
 	addDays,
 	addMinutes,
+	atMinutes,
 	formatHourLabel,
 	formatTime,
 	fromLocalISODate,
 	minutesSinceMidnight,
 	sameDay,
+	sameMinute,
+	spanMinutesIntoDay,
 	startOfDay,
+	startOfNextDay,
 	startOfWeek,
 	toLocalISODate,
 } from "../dates";
@@ -32,9 +37,8 @@ type TimeGridZone = {
 	day: Date;
 };
 
-const HOURS = 24;
+const HOURS = DAY_MINUTES / 60;
 const HOUR_HEIGHT = 38; // px per hour, keep in sync with styles.css
-const DAY_MINUTES = HOURS * 60;
 const SNAP_MINUTES = 15;
 const MIN_BLOCK_HEIGHT = 6;
 const COMPACT_BLOCK_HEIGHT = 36;
@@ -77,20 +81,19 @@ function segmentsForDay(
 	defaultMinutes: number,
 ): DaySegment[] {
 	const dayStart = startOfDay(day).getTime();
-	const dayEnd = dayStart + DAY_MINUTES * 60000;
+	const dayEnd = startOfNextDay(day).getTime();
 	const segments: DaySegment[] = [];
 	for (const event of events) {
 		if (event.allDay) continue;
 		const start = event.start.getTime();
 		const end = endTimeOf(event, defaultMinutes);
-		if (end <= dayStart || start >= dayEnd) continue;
-		const startMin = (Math.max(start, dayStart) - dayStart) / 60000;
-		const endMin = (Math.min(end, dayEnd) - dayStart) / 60000;
+		const span = spanMinutesIntoDay(start, end, dayStart, dayEnd);
+		if (!span) continue;
 		segments.push({
 			event,
-			startMin,
-			endMin,
-			paintedEndMin: paintedEnd(startMin, endMin),
+			startMin: span.startMin,
+			endMin: span.endMin,
+			paintedEndMin: paintedEnd(span.startMin, span.endMin),
 			continuesBefore: start < dayStart,
 			continuesAfter: end > dayEnd,
 		});
@@ -170,6 +173,10 @@ function packSegments(segments: DaySegment[]): PlacedSegment[] {
 	}
 
 	return placed;
+}
+
+function nowLineOffset(now: Date): string {
+	return `${(minutesSinceMidnight(now) / 60) * HOUR_HEIGHT}px`;
 }
 
 export class TimeGridLayout implements CalendarLayoutRenderer {
@@ -319,6 +326,16 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 		for (const day of days) {
 			this.buildDayColumn(cols, day, ctx);
 		}
+
+		this.buildNowLineLead(cols, days, ctx);
+	}
+
+	private buildNowLineLead(cols: HTMLElement, days: Date[], ctx: LayoutContext): void {
+		const todayIndex = days.findIndex((day) => sameDay(day, ctx.today));
+		if (todayIndex <= 0) return;
+		const lead = cols.createDiv({ cls: "obsilities-calendar-now-line-lead" });
+		lead.style.top = nowLineOffset(ctx.today);
+		lead.style.right = `${((days.length - todayIndex) / days.length) * 100}%`;
 	}
 
 	private buildDayColumn(cols: HTMLElement, day: Date, ctx: LayoutContext): void {
@@ -339,11 +356,10 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 		}
 
 		if (sameDay(day, ctx.today)) {
-			const now = ctx.today;
 			const line = col.createDiv({
 				cls: "obsilities-calendar-now-line",
 			});
-			line.style.top = `${(minutesSinceMidnight(now) / 60) * HOUR_HEIGHT}px`;
+			line.style.top = nowLineOffset(ctx.today);
 		}
 	}
 
@@ -384,14 +400,15 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 
 		attachChipInteractions(block, event, ctx, this.makeDragSpec(event, ctx, day));
 
-		if (!ctx.editable) return;
+		if (!ctx.editable || !event.editable) return;
 		if (!segment.continuesBefore) {
 			const topHandle = block.createDiv({
 				cls: "obsilities-calendar-event-resize is-top",
 			});
 			this.registerEdgeDrag(topHandle, event, "start", ctx);
 		}
-		if (!segment.continuesAfter) {
+		// The end handle writes the end property, so it needs one to write to
+		if (!segment.continuesAfter && event.endSource) {
 			const bottomHandle = block.createDiv({
 				cls: "obsilities-calendar-event-resize is-bottom",
 			});
@@ -441,10 +458,7 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 				if (!zone) return false;
 				const allDay = zone.kind === "allday";
 				const start = this.dropStart(event, zone, y, grabDay, grabMinutes);
-				if (
-					allDay === event.allDay &&
-					start.getTime() === event.start.getTime()
-				) {
+				if (allDay === event.allDay && sameMinute(start, event.start)) {
 					return false;
 				}
 				ctx.callbacks.reschedule(event, start, allDay);
@@ -467,14 +481,15 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 		const shifted = shiftEventStart(event, grabDay, zone.day);
 		if (zone.kind === "allday") return shifted;
 		if (grabMinutes === null) {
-			const dropped = addMinutes(
-				startOfDay(zone.day),
+			const dropped = atMinutes(
+				zone.day,
 				this.snappedMinutes(zone.col, clientY, DAY_MINUTES - SNAP_MINUTES),
 			);
 			return addDays(dropped, -dayDelta(event.start, grabDay));
 		}
 		const delta = this.minutesAt(zone.col, clientY) - grabMinutes;
-		return addMinutes(shifted, Math.round(delta / SNAP_MINUTES) * SNAP_MINUTES);
+		const snapped = Math.round(delta / SNAP_MINUTES) * SNAP_MINUTES;
+		return atMinutes(shifted, minutesSinceMidnight(shifted) + snapped);
 	}
 
 	private zoneAt(x: number, y: number): TimeGridZone | null {
@@ -517,18 +532,18 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 		let day = startOfDay(start);
 		for (let guard = 0; day.getTime() < endMs && guard < 366; guard++) {
 			const dayStart = day.getTime();
-			const dayEnd = dayStart + DAY_MINUTES * 60000;
+			const next = startOfNextDay(day);
+			const dayEnd = next.getTime();
 			const col = this.timedColForDay(toLocalISODate(day));
-			day = addDays(day, 1);
+			day = next;
 			if (!col) continue; // Day not in view
 
-			const topMin = (Math.max(start.getTime(), dayStart) - dayStart) / 60000;
-			const botMin = (Math.min(endMs, dayEnd) - dayStart) / 60000;
-			if (botMin <= topMin) continue;
+			const span = spanMinutesIntoDay(start.getTime(), endMs, dayStart, dayEnd);
+			if (!span) continue;
 			const continuesBefore = start.getTime() < dayStart;
 			this.appendPreviewSegment(col, {
-				topMin,
-				botMin,
+				topMin: span.startMin,
+				botMin: span.endMin,
 				timeLabel: continuesBefore ? null : formatTime(start),
 				title,
 				continuesBefore,
@@ -663,7 +678,7 @@ export class TimeGridLayout implements CalendarLayoutRenderer {
 		const zone = this.zoneAt(clientX, clientY);
 		if (!zone || zone.kind !== "timed") return null;
 		const minutes = this.snappedMinutes(zone.col, clientY, DAY_MINUTES);
-		const candidate = addMinutes(startOfDay(zone.day), minutes).getTime();
+		const candidate = atMinutes(zone.day, minutes).getTime();
 		const minMs = SNAP_MINUTES * 60000;
 		if (edge === "end") {
 			const startMs = event.start.getTime();
